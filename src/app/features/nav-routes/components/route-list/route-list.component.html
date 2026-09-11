@@ -1,0 +1,176 @@
+<p-confirmDialog />
+
+<div class="page-header">
+  <div class="header-left">
+    <i class="pi pi-sitemap header-icon"></i>
+    <div>
+      <h2>Rutas de Navegación</h2>
+      <span class="subtitle">Estructura del menú del sistema</span>
+    </div>
+  </div>
+  <button class="btn-primary" (click)="onCreate()"><i class="pi pi-plus"></i> Nueva ruta</button>
+</div>
+
+@if (loading()) {
+  <div class="table-card">
+    <p-treeTable [value]="[]" [loading]="true" styleClass="p-treetable-sm" />
+  </div>
+} @else if (groups().length === 0) {
+  <div class="table-card">
+    <div class="empty-state"><i class="pi pi-sitemap"></i><p>No hay rutas configuradas</p></div>
+  </div>
+} @else {
+  @for (group of groups(); track group.companyId) {
+    <div class="company-group">
+      @if (authService.isSystemAdmin()) {
+        <div class="company-group-header">
+          <i class="pi pi-building"></i>
+          <span class="company-group-name">{{ group.companyName }}</span>
+          <span class="company-group-count">{{ group.nodes.length }} raíz(es)</span>
+          <button class="group-add-btn" (click)="onCreate(group.companyId)" title="Nueva ruta en esta empresa">
+            <i class="pi pi-plus"></i>
+          </button>
+        </div>
+      }
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <i class="pi pi-search"></i>
+            <input
+              type="text"
+              [(ngModel)]="group.search"
+              placeholder="Buscar por nombre o ruta..."
+            />
+          </div>
+        </div>
+
+        <p-treeTable [value]="filteredNodes(group)" styleClass="p-treetable-sm">
+          <ng-template pTemplate="header">
+            <tr>
+              <th style="width: 30%">Nombre</th>
+              <th>Ruta</th>
+              <th>Icono</th>
+              <th>Window ID</th>
+              <th style="width: 5%">Nivel</th>
+              <th style="width: 5%">Orden</th>
+              <th style="width: 7%">Estado</th>
+              <th style="text-align: center; width: 8%">Acciones</th>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="body" let-rowNode let-rowData="rowData">
+            <tr [class]="'level-' + rowData.level">
+              <td>
+                <div class="name-cell" [style.padding-left.rem]="rowData.level * 1.5">
+                  @if (rowData.children?.length > 0) { <p-treeTableToggler [rowNode]="rowNode" /> }
+                  @else { <span class="leaf-spacer"></span> }
+                  <span class="level-dot" [class]="'lvl-' + rowData.level"></span>
+                  <span class="route-name">{{ rowData.windowName }}</span>
+                  @if (rowData.children?.length > 0) { <span class="children-count">{{ rowData.children.length }}</span> }
+                </div>
+              </td>
+              <td><code class="route-path" [class.is-group]="rowData.routePath === '#'">{{ rowData.routePath }}</code></td>
+              <td><span class="icon-cell">{{ rowData.icon || '—' }}</span></td>
+              <td><code class="window-id">{{ rowData.windowId || '—' }}</code></td>
+              <td><span class="level-badge" [class]="'lvl-' + rowData.level">{{ rowData.level }}</span></td>
+              <td class="center">{{ rowData.sortOrder }}</td>
+              <td><span class="status-badge" [class.active]="rowData.isActive" [class.inactive]="!rowData.isActive">{{ rowData.isActive ? 'Activo' : 'Inactivo' }}</span></td>
+              <td>
+                <div class="actions-cell">
+                  <button class="action-btn edit" (click)="onEdit(rowData)"><i class="pi pi-pencil"></i></button>
+                  <button class="action-btn delete" (click)="onDeactivate(rowData)"><i class="pi pi-trash"></i></button>
+                </div>
+              </td>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="emptymessage">
+            <tr><td colspan="8"><div class="empty-state"><i class="pi pi-search"></i><p>Sin resultados para "{{ group.search }}"</p></div></td></tr>
+          </ng-template>
+        </p-treeTable>
+      </div>
+    </div>
+  }
+}
+
+<!-- MODAL -->
+<p-dialog
+  [(visible)]="showModal"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [closable]="true"
+  [style]="{ width: '560px', borderRadius: '20px', overflow: 'hidden' }"
+  [contentStyle]="{ padding: '0' }"
+  [showHeader]="false"
+  styleClass="route-modal"
+>
+  <div class="rm-header">
+    <div class="rm-title">
+      <i class="pi" [class.pi-plus-circle]="!isEdit()" [class.pi-pencil]="isEdit()"></i>
+      {{ isEdit() ? 'Editar Ruta' : 'Nueva Ruta' }}
+    </div>
+    <button class="rm-close" (click)="showModal = false"><i class="pi pi-times"></i></button>
+  </div>
+
+  <div class="rm-body">
+    @if (!isEdit() && authService.isSystemAdmin() && editCompanyId) {
+      <p class="target-company-hint"><i class="pi pi-building"></i> Se creará en <strong>{{ companyName(editCompanyId) }}</strong></p>
+    }
+    <div class="rm-row">
+      <div class="rm-field">
+        <label>Nombre *</label>
+        <input type="text" [(ngModel)]="form.windowName" placeholder="ej: Dashboard" />
+      </div>
+      <div class="rm-field">
+        <label>Ruta *</label>
+        <input type="text" [(ngModel)]="form.routePath" placeholder="ej: /dashboard o #" />
+      </div>
+    </div>
+    <div class="rm-row">
+      <div class="rm-field">
+        <label>Icono</label>
+        <input type="text" [(ngModel)]="form.icon" placeholder="ej: fas fa-home" />
+      </div>
+      <div class="rm-field">
+        <label>Window ID</label>
+        <input type="text" [(ngModel)]="form.windowId" placeholder="ej: win-dashboard" />
+      </div>
+    </div>
+    <div class="rm-row rm-three">
+      <div class="rm-field">
+        <label>Padre</label>
+        <select [(ngModel)]="form.parentId">
+          <option [ngValue]="null">— Ninguno (raíz) —</option>
+          @for (opt of parentOptions(); track opt.value) {
+            @if (opt.value !== null) { <option [ngValue]="opt.value">{{ opt.label }}</option> }
+          }
+        </select>
+      </div>
+      <div class="rm-field">
+        <label>Nivel</label>
+        <input type="number" [(ngModel)]="form.level" min="0" max="5" />
+      </div>
+      <div class="rm-field">
+        <label>Orden</label>
+        <input type="number" [(ngModel)]="form.sortOrder" min="1" max="100" />
+      </div>
+    </div>
+    @if (isEdit()) {
+      <div class="rm-switch-row">
+        <span class="rm-switch-label">Activo</span>
+        <label class="rm-toggle">
+          <input type="checkbox" [(ngModel)]="form.isActive" />
+          <span class="rm-slider"></span>
+        </label>
+      </div>
+    }
+  </div>
+
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showModal = false">Cancelar</button>
+    <button class="rm-btn-save" (click)="onSave()" [disabled]="saving()">
+      @if (saving()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+      {{ isEdit() ? 'Actualizar' : 'Crear' }}
+    </button>
+  </div>
+</p-dialog>

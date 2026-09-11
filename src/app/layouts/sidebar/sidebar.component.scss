@@ -1,0 +1,167 @@
+$sidebar-width: 260px;
+$sidebar-collapsed: 64px;
+$transition: 0.25s ease;
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: $sidebar-width;
+  height: 100vh;
+  /* "Difuminado" sin cambiar el color: misma capa de sombra/luz que headers de modal y botones */
+  background:
+    linear-gradient(135deg, rgba(0, 0, 0, 0.25), rgba(255, 255, 255, 0.08)),
+    var(--brand-header);
+  display: flex;
+  flex-direction: column;
+  transition: width $transition;
+  z-index: 1000;
+  overflow: hidden;
+
+  &.collapsed {
+    width: $sidebar-collapsed;
+  }
+}
+
+// --- Header ---
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  min-height: 64px;
+}
+
+.sidebar-brand {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--brand-header-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.3px;
+  /* Nombres de empresa pueden ser más largos que "Sistema de Gestión" — recortar en vez de desbordar */
+  min-width: 0;
+}
+
+.toggle-btn {
+  background: none;
+  border: none;
+  color: var(--brand-header-text-muted);
+  cursor: pointer;
+  padding: 0.375rem;
+  border-radius: 6px;
+  transition: background $transition;
+
+  &:hover {
+    background: var(--brand-header-overlay-weak);
+    color: var(--brand-header-text);
+  }
+
+  i { font-size: 1.125rem; }
+}
+
+// --- Nav ---
+.sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.5rem 0;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+  }
+}
+
+.nav-list,
+.nav-sublist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 1rem;
+  color: var(--brand-header-text-muted);
+  cursor: pointer;
+  transition: background $transition, color $transition;
+  white-space: nowrap;
+  text-decoration: none;
+  border-left: 3px solid transparent;
+
+  i:first-child {
+    width: 20px;
+    text-align: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    background: var(--brand-header-overlay-weak);
+    color: var(--brand-header-text);
+  }
+
+  &.active,
+  &.router-link-active {
+    background: var(--brand-header-overlay-strong);
+    color: var(--brand-header-text);
+    border-left-color: var(--brand-button);
+  }
+}
+
+.nav-text {
+  flex: 1;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.expand-icon {
+  font-size: 0.75rem;
+  margin-left: auto;
+  transition: transform $transition;
+}
+
+// --- Sublevels ---
+.nav-sublist {
+  .nav-link {
+    padding-left: 2.75rem;
+  }
+
+  &.deep .nav-link {
+    padding-left: 3.75rem;
+  }
+}
+
+.sub-link i:first-child {
+  font-size: 0.8125rem;
+}
+
+.deep-link i:first-child {
+  font-size: 0.75rem;
+}
+
+// --- Footer ---
+.sidebar-footer {
+  /* Gris neutro fijo: a propósito no usa var(--brand-header), para que el logout
+     siempre se distinga igual sin importar el color/modo de texto de la empresa */
+  background: #33333d;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 0.5rem 0;
+
+  .nav-link {
+    color: #e57373;
+
+    &:hover {
+      background: rgba(229, 115, 115, 0.1);
+      color: #ef5350;
+    }
+  }
+}

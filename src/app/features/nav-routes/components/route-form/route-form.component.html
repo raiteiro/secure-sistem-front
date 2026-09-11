@@ -1,0 +1,89 @@
+<p-toast />
+
+<div class="page-header">
+  <h2>
+    <i class="pi" [class.pi-plus-circle]="!isEdit()" [class.pi-pencil]="isEdit()"></i>
+    {{ isEdit() ? 'Editar Ruta' : 'Nueva Ruta' }}
+  </h2>
+</div>
+
+<div class="form-card">
+  <form (ngSubmit)="onSave()" class="route-form">
+    <div class="form-grid">
+      <div class="form-field">
+        <label for="windowName">Nombre *</label>
+        <input id="windowName" type="text" pInputText [(ngModel)]="form.windowName"
+               name="windowName" placeholder="ej: Dashboard" class="w-full" />
+      </div>
+
+      <div class="form-field">
+        <label for="routePath">Ruta *</label>
+        <input id="routePath" type="text" pInputText [(ngModel)]="form.routePath"
+               name="routePath" placeholder="ej: /dashboard o #" class="w-full" />
+      </div>
+
+      <div class="form-field">
+        <label for="icon">Icono</label>
+        <input id="icon" type="text" pInputText [(ngModel)]="form.icon"
+               name="icon" placeholder="ej: fas fa-home" class="w-full" />
+      </div>
+
+      <div class="form-field">
+        <label for="windowId">Window ID</label>
+        <input id="windowId" type="text" pInputText [(ngModel)]="form.windowId"
+               name="windowId" placeholder="ej: win-dashboard" class="w-full" />
+      </div>
+
+      <div class="form-field">
+        <label for="parentId">Padre</label>
+        <p-dropdown
+          id="parentId"
+          [options]="parentOptions()"
+          [(ngModel)]="form.parentId"
+          name="parentId"
+          placeholder="Seleccionar padre"
+          [showClear]="true"
+          styleClass="w-full"
+        />
+      </div>
+
+      <div class="form-field">
+        <label for="level">Nivel</label>
+        <p-inputNumber
+          id="level"
+          [(ngModel)]="form.level"
+          name="level"
+          [min]="0" [max]="5"
+          [showButtons]="true"
+          styleClass="w-full"
+        />
+      </div>
+
+      <div class="form-field">
+        <label for="sortOrder">Orden</label>
+        <p-inputNumber
+          id="sortOrder"
+          [(ngModel)]="form.sortOrder"
+          name="sortOrder"
+          [min]="1" [max]="100"
+          [showButtons]="true"
+          styleClass="w-full"
+        />
+      </div>
+
+      @if (isEdit()) {
+        <div class="form-field switch-field">
+          <label for="isActive">Activo</label>
+          <p-inputSwitch id="isActive" [(ngModel)]="form.isActive" name="isActive" />
+        </div>
+      }
+    </div>
+
+    <div class="form-actions">
+      <button pButton type="button" label="Cancelar" icon="pi pi-times"
+              class="p-button-outlined p-button-secondary" (click)="onCancel()"></button>
+      <button pButton type="submit" [label]="isEdit() ? 'Actualizar' : 'Crear'"
+              icon="pi pi-check" [loading]="loading()"></button>
+    </div>
+  </form>
+</div>

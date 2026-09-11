@@ -1,0 +1,256 @@
+<p-confirmDialog />
+
+<!-- Header -->
+<div class="page-header">
+  <div class="header-left">
+    <i class="pi pi-users header-icon"></i>
+    <div>
+      <h2>Usuarios</h2>
+      <span class="subtitle">Gestión de usuarios del sistema</span>
+    </div>
+  </div>
+  <button class="btn-primary" (click)="onCreate()">
+    <i class="pi pi-plus"></i>
+    Nuevo usuario
+  </button>
+</div>
+
+<!-- MODAL: Crear/Editar Usuario -->
+<p-dialog [(visible)]="showModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '560px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi" [class.pi-user-plus]="!isEdit()" [class.pi-user-edit]="isEdit()"></i> {{ isEdit() ? 'Editar Usuario' : 'Nuevo Usuario' }}</div>
+    <button class="rm-close" (click)="showModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    <div class="rm-row">
+      <div class="rm-field">
+        <label>Usuario *</label>
+        <input type="text" [(ngModel)]="form.username" placeholder="ej: juan.perez" />
+      </div>
+      <div class="rm-field">
+        <label>Email *</label>
+        <input type="email" [(ngModel)]="form.email" placeholder="ej: juan@empresa.com" />
+      </div>
+    </div>
+    <div class="rm-row">
+      <div class="rm-field">
+        <label>Nombre *</label>
+        <input type="text" [(ngModel)]="form.firstName" placeholder="Nombre" />
+      </div>
+      <div class="rm-field">
+        <label>Apellido *</label>
+        <input type="text" [(ngModel)]="form.lastName" placeholder="Apellido" />
+      </div>
+    </div>
+    <div class="rm-row">
+      <div class="rm-field">
+        <label>Teléfono</label>
+        <input type="text" [(ngModel)]="form.phoneNumber" placeholder="5551234567" />
+      </div>
+      <div class="rm-field">
+        <label>Rol *</label>
+        <select [(ngModel)]="form.roleId">
+          <option [ngValue]="0" disabled>Seleccionar rol</option>
+          @for (role of availableRoles(); track role.id) {
+            <option [ngValue]="role.id">{{ role.name }}</option>
+          }
+        </select>
+      </div>
+    </div>
+    @if (!isEdit() && authService.isSystemAdmin()) {
+      <div class="rm-field-single">
+        <label>Empresa</label>
+        <select [(ngModel)]="form.companyId" (ngModelChange)="onCreateCompanyChange()">
+          <option [ngValue]="null">Mi empresa (por defecto)</option>
+          @for (company of companies(); track company.id) {
+            <option [ngValue]="company.id">{{ company.name }}</option>
+          }
+        </select>
+      </div>
+    }
+    @if (!isEdit()) {
+      <div class="rm-field-single">
+        <label>Contraseña *</label>
+        <input type="password" [(ngModel)]="form.password" placeholder="Mínimo 8 caracteres" />
+      </div>
+    }
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showModal = false">Cancelar</button>
+    <button class="rm-btn-save" (click)="onSave()" [disabled]="saving()">
+      @if (saving()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+      {{ isEdit() ? 'Actualizar' : 'Crear' }}
+    </button>
+  </div>
+</p-dialog>
+
+<!-- MODAL: Cambiar de empresa (solo admin de sistema) -->
+<p-dialog [(visible)]="showReassignModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '460px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi pi-building"></i> Cambiar de empresa</div>
+    <button class="rm-close" (click)="showReassignModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    <p class="subtitle">Mover a <strong>{{ reassignUsername }}</strong> a otra empresa cierra sus sesiones activas y elimina sus rutas asignadas directamente.</p>
+    <div class="rm-field-single">
+      <label>Empresa destino *</label>
+      <select [(ngModel)]="reassignForm.companyId" (ngModelChange)="onReassignCompanyChange()">
+        <option [ngValue]="null" disabled>Seleccionar empresa</option>
+        @for (company of companies(); track company.id) {
+          <option [ngValue]="company.id">{{ company.name }}</option>
+        }
+      </select>
+    </div>
+    <div class="rm-field-single">
+      <label>Rol en la empresa destino *</label>
+      <select [(ngModel)]="reassignForm.roleId">
+        <option [ngValue]="null" disabled>Seleccionar rol</option>
+        @for (role of availableReassignRoles(); track role.id) {
+          <option [ngValue]="role.id">{{ role.name }}</option>
+        }
+      </select>
+    </div>
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showReassignModal = false">Cancelar</button>
+    <button class="rm-btn-save" (click)="onSaveReassign()" [disabled]="reassigning()">
+      @if (reassigning()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-arrow-right-arrow-left"></i> }
+      Mover
+    </button>
+  </div>
+</p-dialog>
+
+<!-- MODAL: Contraseña temporal (tras restablecer) -->
+<p-dialog [(visible)]="showTempPasswordModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [closable]="false" [style]="{ width: '440px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi pi-key"></i> Contraseña temporal</div>
+  </div>
+  <div class="rm-body">
+    <p class="subtitle">
+      Se restableció la contraseña de <strong>{{ tempPasswordUsername }}</strong>. Compártesela por otro medio
+      (teléfono, chat, en persona) — no se volverá a mostrar después de cerrar esta ventana.
+    </p>
+    <div class="temp-password-box">
+      <code>{{ tempPassword }}</code>
+      <button class="copy-btn" (click)="copyTempPassword()" [title]="tempPasswordCopied() ? 'Copiado' : 'Copiar'">
+        <i class="pi" [class.pi-copy]="!tempPasswordCopied()" [class.pi-check]="tempPasswordCopied()"></i>
+      </button>
+    </div>
+    <p class="temp-password-hint">
+      <i class="pi pi-info-circle"></i>
+      El usuario deberá cambiarla al iniciar sesión y todas sus sesiones activas fueron cerradas.
+    </p>
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-save" (click)="showTempPasswordModal = false">
+      <i class="pi pi-check"></i> Listo
+    </button>
+  </div>
+</p-dialog>
+
+@for (group of userGroups(); track group.companyId) {
+  <div class="company-group">
+    @if (authService.isSystemAdmin()) {
+      <div class="company-group-header">
+        <i class="pi pi-building"></i>
+        <span class="company-group-name">{{ group.companyName }}</span>
+        <button class="group-add-btn" (click)="onCreate(group.companyId)" title="Nuevo usuario en esta empresa">
+          <i class="pi pi-plus"></i>
+        </button>
+      </div>
+    }
+
+    <div class="table-card">
+      <div class="table-toolbar">
+        <div class="search-box">
+          <i class="pi pi-search"></i>
+          <input
+            type="text"
+            placeholder="Buscar por nombre, usuario, email..."
+            (input)="dt.filterGlobal($any($event.target).value, 'contains')"
+          />
+        </div>
+        <span class="user-count">{{ group.users.length }} usuario(s)</span>
+      </div>
+
+      <p-table
+        #dt
+        [value]="group.users"
+        [loading]="loading()"
+        [paginator]="true"
+        [rows]="10"
+        [rowsPerPageOptions]="[5, 10, 25]"
+        [globalFilterFields]="['username', 'firstName', 'lastName', 'email']"
+        [rowHover]="true"
+        styleClass="p-datatable-sm"
+      >
+        <ng-template pTemplate="header">
+          <tr>
+            <th pSortableColumn="username">Usuario <p-sortIcon field="username" /></th>
+            <th pSortableColumn="firstName">Nombre <p-sortIcon field="firstName" /></th>
+            <th pSortableColumn="lastName">Apellido <p-sortIcon field="lastName" /></th>
+            <th pSortableColumn="email">Email <p-sortIcon field="email" /></th>
+            <th pSortableColumn="phoneNumber">Teléfono <p-sortIcon field="phoneNumber" /></th>
+            <th>Rol</th>
+            <th style="text-align: center">Acciones</th>
+          </tr>
+        </ng-template>
+
+        <ng-template pTemplate="body" let-user>
+          <tr>
+            <td>
+              <span class="username-cell">
+                <i class="pi pi-user"></i>
+                {{ user.username }}
+                @if (user.mustChangePassword) {
+                  <span class="pending-badge" title="Debe cambiar su contraseña al ingresar">Pendiente</span>
+                }
+              </span>
+            </td>
+            <td>{{ user.firstName }}</td>
+            <td>{{ user.lastName }}</td>
+            <td><span class="email-cell">{{ user.email }}</span></td>
+            <td>{{ user.phoneNumber || '—' }}</td>
+            <td>
+              <span class="role-badge" [class.admin]="user.roleId === 1">
+                {{ user.roleName || (user.roleId === 1 ? 'Admin' : 'Usuario') }}
+              </span>
+            </td>
+            <td>
+              <div class="actions-cell">
+                @if (authService.isSystemAdmin()) {
+                  <button class="action-btn move" (click)="onReassign(user)" title="Cambiar de empresa">
+                    <i class="pi pi-arrow-right-arrow-left"></i>
+                  </button>
+                }
+                <button class="action-btn reset" (click)="onResetPassword(user)" title="Restablecer contraseña">
+                  <i class="pi pi-key"></i>
+                </button>
+                <button class="action-btn edit" (click)="onEdit(user)" title="Editar">
+                  <i class="pi pi-pencil"></i>
+                </button>
+                <button class="action-btn delete" (click)="onDeactivate(user)" title="Desactivar">
+                  <i class="pi pi-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+
+        <ng-template pTemplate="emptymessage">
+          <tr>
+            <td colspan="7">
+              <div class="empty-state">
+                <i class="pi pi-inbox"></i>
+                <p>No se encontraron usuarios</p>
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  </div>
+}

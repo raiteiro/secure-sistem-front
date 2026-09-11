@@ -1,0 +1,77 @@
+<aside class="sidebar" [class.collapsed]="collapsed()">
+  <!-- Header -->
+  <div class="sidebar-header">
+    @if (!collapsed()) {
+      <span class="sidebar-brand" [title]="authService.currentUser()?.companyName || 'Sistema de Gestión'">{{ authService.currentUser()?.companyName || 'Sistema de Gestión' }}</span>
+    }
+    <button class="toggle-btn" (click)="toggleSidebar()" aria-label="Toggle sidebar">
+      <i class="pi" [class.pi-angle-left]="!collapsed()" [class.pi-angle-right]="collapsed()"></i>
+    </button>
+  </div>
+
+  <!-- Navigation -->
+  <nav class="sidebar-nav">
+    <ul class="nav-list">
+      @for (item of navService.routes(); track item.id) {
+        <li class="nav-item">
+          <div class="nav-link" [class.active]="isActive(item)" (click)="onItemClick(item)" [title]="item.windowName">
+            <i [class]="mapIcon(item.icon)"></i>
+            @if (!collapsed()) {
+              <span class="nav-text">{{ item.windowName }}</span>
+              @if (item.children.length > 0) {
+                <i class="pi expand-icon"
+                   [class.pi-angle-down]="isExpanded(item)"
+                   [class.pi-angle-right]="!isExpanded(item)">
+                </i>
+              }
+            }
+          </div>
+
+          <!-- Level 1 children -->
+          @if (item.children.length > 0 && isExpanded(item) && !collapsed()) {
+            <ul class="nav-sublist">
+              @for (child of item.children; track child.id) {
+                <li class="nav-item">
+                  <div class="nav-link sub-link" [class.active]="isActive(child)" (click)="onItemClick(child)" [title]="child.windowName">
+                    <i [class]="mapIcon(child.icon)"></i>
+                    <span class="nav-text">{{ child.windowName }}</span>
+                    @if (child.children.length > 0) {
+                      <i class="pi expand-icon"
+                         [class.pi-angle-down]="isExpanded(child)"
+                         [class.pi-angle-right]="!isExpanded(child)">
+                      </i>
+                    }
+                  </div>
+
+                  <!-- Level 2 children -->
+                  @if (child.children.length > 0 && isExpanded(child)) {
+                    <ul class="nav-sublist deep">
+                      @for (grandchild of child.children; track grandchild.id) {
+                        <li class="nav-item">
+                          <div class="nav-link sub-link deep-link" [class.active]="isActive(grandchild)" (click)="onItemClick(grandchild)" [title]="grandchild.windowName">
+                            <i [class]="mapIcon(grandchild.icon)"></i>
+                            <span class="nav-text">{{ grandchild.windowName }}</span>
+                          </div>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        </li>
+      }
+    </ul>
+  </nav>
+
+  <!-- Footer -->
+  <div class="sidebar-footer">
+    <div class="nav-link" (click)="logout()" title="Cerrar sesión">
+      <i class="pi pi-sign-out"></i>
+      @if (!collapsed()) {
+        <span class="nav-text">Cerrar sesión</span>
+      }
+    </div>
+  </div>
+</aside>

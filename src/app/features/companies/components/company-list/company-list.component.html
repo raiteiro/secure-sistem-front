@@ -1,0 +1,194 @@
+<p-confirmDialog />
+
+<div class="page-header">
+  <div class="header-left">
+    <i class="pi pi-building header-icon"></i>
+    <div><h2>Empresas</h2><span class="subtitle">Gestión de empresas y planes de renta</span></div>
+  </div>
+  @if (authService.isSystemAdmin()) {
+    <button class="btn-primary" (click)="onCreate()"><i class="pi pi-plus"></i> Nueva empresa</button>
+  }
+</div>
+
+<div class="table-card">
+  <p-table [value]="companies()" [loading]="loading()" [rowHover]="true" styleClass="p-datatable-sm">
+    <ng-template pTemplate="header">
+      <tr>
+        <th pSortableColumn="name">Nombre <p-sortIcon field="name" /></th>
+        <th>RFC</th>
+        <th>Usuarios</th>
+        <th>Sesiones activas</th>
+        <th>Vence</th>
+        <th style="text-align: center">Estado</th>
+        <th style="text-align: center; width: 12%">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template pTemplate="body" let-company>
+      <tr>
+        <td>
+          <span class="company-name">
+            @if (logoThumbUrl(company); as logo) {
+              <img [src]="logo" class="logo-thumb" alt="" />
+            } @else {
+              <i class="pi pi-building"></i>
+            }
+            <span class="color-swatch" [style.background]="presetOf(company).header" [title]="presetOf(company).label"></span>
+            <span class="color-swatch" [style.background]="presetOf(company).button" [title]="presetOf(company).label"></span>
+            {{ company.name }}
+          </span>
+        </td>
+        <td><code class="tax-id">{{ company.taxId }}</code></td>
+        <td>
+          <span class="usage-badge" [class]="usageClass(company.activeUserCount, company.maxUsers)">
+            {{ company.activeUserCount }}{{ company.maxUsers !== null ? ' / ' + company.maxUsers : '' }}
+          </span>
+        </td>
+        <td>
+          <span class="usage-badge" [class]="usageClass(company.activeSessionCount, company.maxConcurrentSessions)">
+            {{ company.activeSessionCount }}{{ company.maxConcurrentSessions !== null ? ' / ' + company.maxConcurrentSessions : '' }}
+          </span>
+        </td>
+        <td>{{ company.subscriptionExpiresAt ? (company.subscriptionExpiresAt | date: 'dd/MM/yyyy') : 'Sin vencimiento' }}</td>
+        <td style="text-align: center">
+          <span class="status-badge" [class.inactive]="!company.isActive">
+            {{ company.isActive ? 'Activa' : 'Inactiva' }}
+          </span>
+        </td>
+        <td>
+          <div class="actions-cell">
+            <button class="action-btn edit" (click)="onEdit(company)" title="Editar"><i class="pi pi-pencil"></i></button>
+            @if (company.isActive) {
+              <button class="action-btn delete" (click)="onDeactivate(company)" title="Desactivar"><i class="pi pi-trash"></i></button>
+            }
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template pTemplate="emptymessage">
+      <tr><td colspan="7"><div class="empty-state"><i class="pi pi-building"></i><p>No hay empresas registradas</p></div></td></tr>
+    </ng-template>
+  </p-table>
+</div>
+
+<!-- MODAL: Crear/Editar Empresa -->
+<p-dialog [(visible)]="showModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '520px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi" [class.pi-plus-circle]="!isEdit()" [class.pi-pencil]="isEdit()"></i> {{ isEdit() ? 'Editar Empresa' : 'Nueva Empresa' }}</div>
+    <button class="rm-close" (click)="showModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    <div class="rm-field-single">
+      <label>Nombre *</label>
+      <input type="text" [(ngModel)]="form.name" placeholder="ej: Cliente Nuevo SA" />
+    </div>
+    <div class="rm-field-single">
+      <label>RFC *</label>
+      <input type="text" [(ngModel)]="form.taxId" placeholder="ej: RFC123456" />
+    </div>
+    @if (authService.isSystemAdmin()) {
+      <div class="rm-row">
+        <div class="rm-field">
+          <label>Usuarios máximos</label>
+          <input type="number" min="0" [(ngModel)]="form.maxUsers" placeholder="Sin límite" />
+        </div>
+        <div class="rm-field">
+          <label>Sesiones concurrentes máx.</label>
+          <input type="number" min="0" [(ngModel)]="form.maxConcurrentSessions" placeholder="Sin límite" />
+        </div>
+      </div>
+      <div class="rm-field-single">
+        <label>Vence suscripción</label>
+        <input type="date" [(ngModel)]="form.subscriptionExpiresAt" />
+      </div>
+    }
+
+    <div class="rm-field-single">
+      <label>Dirección</label>
+      <input type="text" [(ngModel)]="form.address" placeholder="Para el membrete de reportes/facturas" />
+    </div>
+    <div class="rm-row">
+      <div class="rm-field">
+        <label>Teléfono</label>
+        <input type="text" [(ngModel)]="form.phone" placeholder="5551234567" />
+      </div>
+      <div class="rm-field">
+        <label>Email</label>
+        <input type="email" [(ngModel)]="form.email" placeholder="contacto@empresa.com" />
+      </div>
+    </div>
+    <div class="rm-field-single">
+      <label>Sitio web</label>
+      <input type="text" [(ngModel)]="form.website" placeholder="www.empresa.com" />
+    </div>
+    <div class="rm-row">
+      <div class="rm-field">
+        <label>Instagram</label>
+        <input type="text" [(ngModel)]="form.instagram" placeholder="instagram.com/empresa" />
+      </div>
+      <div class="rm-field">
+        <label>Facebook</label>
+        <input type="text" [(ngModel)]="form.facebook" placeholder="facebook.com/empresa" />
+      </div>
+    </div>
+    <div class="rm-row">
+      <div class="rm-field">
+        <label>TikTok</label>
+        <input type="text" [(ngModel)]="form.tikTok" placeholder="tiktok.com/@empresa" />
+      </div>
+      <div class="rm-field">
+        <label>WhatsApp</label>
+        <input type="text" [(ngModel)]="form.whatsApp" placeholder="5215512345678" />
+      </div>
+    </div>
+
+    @if (isEdit()) {
+      <div class="rm-field-single">
+        <label>Logo</label>
+        <div class="logo-upload-row">
+          @if (logoUrl(); as logo) {
+            <img [src]="logo" class="logo-preview" alt="Logo actual" />
+          } @else {
+            <div class="logo-preview logo-preview-empty"><i class="pi pi-image"></i></div>
+          }
+          <label class="logo-upload-btn" [class.disabled]="uploadingLogo()">
+            @if (uploadingLogo()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-upload"></i> }
+            {{ uploadingLogo() ? 'Subiendo...' : (logoUrl() ? 'Cambiar logo' : 'Subir logo') }}
+            <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" [disabled]="uploadingLogo()" (change)="onLogoFileSelected($event)" hidden />
+          </label>
+        </div>
+        <span class="logo-hint">PNG, JPEG, WEBP o GIF · máx. 2 MB</span>
+      </div>
+    }
+
+    <div class="rm-field-single">
+      <label>Paleta de color</label>
+      <div class="preset-grid">
+        @for (preset of presets; track preset.id) {
+          <button
+            type="button"
+            class="preset-swatch"
+            [class.selected]="form.colorPreset === preset.id"
+            [title]="preset.label"
+            (click)="form.colorPreset = preset.id"
+          >
+            <span class="preset-swatch-colors">
+              <span class="preset-swatch-half" [style.background]="preset.header"></span>
+              <span class="preset-swatch-half" [style.background]="preset.button"></span>
+            </span>
+            @if (form.colorPreset === preset.id) {
+              <i class="pi pi-check preset-swatch-check"></i>
+            }
+          </button>
+        }
+      </div>
+    </div>
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showModal = false">Cancelar</button>
+    <button class="rm-btn-save" (click)="onSave()" [disabled]="saving()">
+      @if (saving()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+      {{ isEdit() ? 'Actualizar' : 'Crear' }}
+    </button>
+  </div>
+</p-dialog>

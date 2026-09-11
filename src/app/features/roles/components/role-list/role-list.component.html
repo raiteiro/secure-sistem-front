@@ -1,0 +1,141 @@
+<p-confirmDialog />
+
+<div class="page-header">
+  <div class="header-left">
+    <i class="pi pi-id-card header-icon"></i>
+    <div><h2>Roles</h2><span class="subtitle">Gestión de roles y permisos</span></div>
+  </div>
+  <button class="btn-primary" (click)="onCreate()"><i class="pi pi-plus"></i> Nuevo rol</button>
+</div>
+
+@for (group of roleGroups(); track group.companyId) {
+  <div class="company-group">
+    @if (authService.isSystemAdmin()) {
+      <div class="company-group-header">
+        <i class="pi pi-building"></i>
+        <span class="company-group-name">{{ group.companyName }}</span>
+        <button class="group-add-btn" (click)="onCreate(group.companyId)" title="Nuevo rol en esta empresa">
+          <i class="pi pi-plus"></i>
+        </button>
+      </div>
+    }
+
+    <div class="table-card">
+      <div class="table-toolbar">
+        <div class="search-box">
+          <i class="pi pi-search"></i>
+          <input
+            type="text"
+            placeholder="Buscar por nombre o descripción..."
+            (input)="dt.filterGlobal($any($event.target).value, 'contains')"
+          />
+        </div>
+        <span class="role-count">{{ group.roles.length }} rol(es)</span>
+      </div>
+
+      <p-table #dt [value]="group.roles" [loading]="loading()" [rowHover]="true"
+        [globalFilterFields]="['name', 'description']" styleClass="p-datatable-sm">
+        <ng-template pTemplate="header">
+          <tr>
+            <th pSortableColumn="name">Nombre <p-sortIcon field="name" /></th>
+            <th>Descripción</th>
+            <th style="width: 10%">Rutas</th>
+            <th style="text-align: center; width: 12%">Acciones</th>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-role>
+          <tr>
+            <td><span class="role-name"><i class="pi pi-shield"></i> {{ role.name }}</span></td>
+            <td><span class="role-desc">{{ role.description || '—' }}</span></td>
+            <td><span class="route-count">{{ role.routeIds?.length || 0 }}</span></td>
+            <td>
+              <div class="actions-cell">
+                <button class="action-btn routes" (click)="onManageRoutes(role)" title="Asignar rutas"><i class="pi pi-sitemap"></i></button>
+                <button class="action-btn edit" (click)="onEdit(role)" title="Editar"><i class="pi pi-pencil"></i></button>
+                <button class="action-btn delete" (click)="onDeactivate(role)" title="Desactivar"><i class="pi pi-trash"></i></button>
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="emptymessage">
+          <tr><td colspan="4"><div class="empty-state"><i class="pi pi-id-card"></i><p>No hay roles configurados</p></div></td></tr>
+        </ng-template>
+      </p-table>
+    </div>
+  </div>
+}
+
+<!-- MODAL: Crear/Editar Rol -->
+<p-dialog [(visible)]="showRoleModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '460px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi" [class.pi-plus-circle]="!isEdit()" [class.pi-pencil]="isEdit()"></i> {{ isEdit() ? 'Editar Rol' : 'Nuevo Rol' }}</div>
+    <button class="rm-close" (click)="showRoleModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    @if (!isEdit() && createCompanyId) {
+      <p class="target-company-hint"><i class="pi pi-building"></i> Se creará en <strong>{{ companyName(createCompanyId) }}</strong></p>
+    }
+    <div class="rm-field-single">
+      <label>Nombre *</label>
+      <input type="text" [(ngModel)]="roleForm.name" placeholder="ej: Operador" />
+    </div>
+    <div class="rm-field-single">
+      <label>Descripción</label>
+      <textarea [(ngModel)]="roleForm.description" placeholder="Descripción del rol..." rows="3"></textarea>
+    </div>
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showRoleModal = false">Cancelar</button>
+    <button class="rm-btn-save" (click)="onSaveRole()" [disabled]="saving()">
+      @if (saving()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+      {{ isEdit() ? 'Actualizar' : 'Crear' }}
+    </button>
+  </div>
+</p-dialog>
+
+<!-- MODAL: Asignar Rutas -->
+<p-dialog [(visible)]="showRoutesModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '520px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi pi-sitemap"></i> Rutas de "{{ routesRoleName }}"</div>
+    <button class="rm-close" (click)="showRoutesModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body routes-body">
+    @for (route of allRoutes(); track route.id) {
+      <!-- Level 0 -->
+      <label class="route-check lvl-0">
+        <input type="checkbox" [checked]="isRouteSelected(route.id)" (change)="toggleRoute(route.id)" />
+        <span class="check-box"></span>
+        <span class="check-label">{{ route.windowName }}</span>
+        <code class="check-path">{{ route.routePath }}</code>
+      </label>
+      <!-- Level 1 -->
+      @for (child of route.children; track child.id) {
+        <label class="route-check lvl-1">
+          <input type="checkbox" [checked]="isRouteSelected(child.id)" (change)="toggleRoute(child.id)" />
+          <span class="check-box"></span>
+          <span class="check-label">{{ child.windowName }}</span>
+          <code class="check-path">{{ child.routePath }}</code>
+        </label>
+        <!-- Level 2 -->
+        @for (gc of child.children; track gc.id) {
+          <label class="route-check lvl-2">
+            <input type="checkbox" [checked]="isRouteSelected(gc.id)" (change)="toggleRoute(gc.id)" />
+            <span class="check-box"></span>
+            <span class="check-label">{{ gc.windowName }}</span>
+            <code class="check-path">{{ gc.routePath }}</code>
+          </label>
+        }
+      }
+    }
+  </div>
+  <div class="rm-footer">
+    <span class="routes-count">{{ selectedRouteIds().size }} ruta(s) seleccionada(s)</span>
+    <button class="rm-btn-cancel" (click)="showRoutesModal = false">Cancelar</button>
+    <button class="rm-btn-save" (click)="onSaveRoutes()" [disabled]="savingRoutes()">
+      @if (savingRoutes()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+      Guardar
+    </button>
+  </div>
+</p-dialog>

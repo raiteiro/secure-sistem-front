@@ -1,0 +1,77 @@
+<div class="login-wrapper">
+  <div class="login-card">
+    <div class="login-header">
+      <div class="login-icon">
+        <i class="pi pi-shield"></i>
+      </div>
+      <h1>Inicia sesión</h1>
+      <p>Ingresa tus credenciales para continuar</p>
+    </div>
+
+    <form (ngSubmit)="onLogin()" class="login-form">
+      @if (errorMessage()) {
+        <div class="error-box">
+          <i class="pi pi-times-circle"></i>
+          <span>{{ errorMessage() }}</span>
+        </div>
+      }
+
+      <div class="input-group">
+        <label for="username">Usuario</label>
+        <div class="input-wrapper">
+          <i class="pi pi-user"></i>
+          <input
+            id="username"
+            type="text"
+            pInputText
+            [(ngModel)]="credentials.username"
+            name="username"
+            placeholder="Ingrese su usuario"
+            aria-label="Nombre de usuario"
+            autocomplete="username"
+          />
+        </div>
+      </div>
+
+      <div class="input-group">
+        <label for="password">Contraseña</label>
+        <div class="input-wrapper">
+          <i class="pi pi-lock"></i>
+          <input
+            id="password"
+            [type]="showPassword() ? 'text' : 'password'"
+            pInputText
+            [(ngModel)]="credentials.password"
+            name="password"
+            placeholder="Ingrese su contraseña"
+            aria-label="Contraseña"
+            autocomplete="current-password"
+          />
+          <button
+            type="button"
+            class="toggle-visibility-btn"
+            (click)="showPassword.set(!showPassword())"
+            [attr.aria-label]="showPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+          >
+            <i class="pi" [class.pi-eye]="!showPassword()" [class.pi-eye-slash]="showPassword()"></i>
+          </button>
+        </div>
+        <a class="forgot-link" routerLink="/forgot-password">¿Olvidaste tu contraseña?</a>
+      </div>
+
+      <button
+        type="submit"
+        class="login-btn"
+        [disabled]="isLoading()"
+      >
+        @if (isLoading()) {
+          <i class="pi pi-spinner pi-spin"></i>
+          <span>Ingresando...</span>
+        } @else {
+          <i class="pi pi-sign-in"></i>
+          <span>Ingresar</span>
+        }
+      </button>
+    </form>
+  </div>
+</div>

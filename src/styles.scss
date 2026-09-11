@@ -1,0 +1,608 @@
+/* PrimeNG theme + core */
+@import "primeng/resources/themes/lara-light-blue/theme.css";
+@import "primeng/resources/primeng.min.css";
+@import "primeicons/primeicons.css";
+@import "primeflex/primeflex.css";
+@import "@fortawesome/fontawesome-free/css/all.min.css";
+
+/* ===== Marca por empresa =====
+   ThemeService aplica una de las 10 paletas fijas de core/constants/color-presets.ts según
+   Companies.colorPreset del usuario logueado. Cada paleta ya trae header/botón armados —
+   nada se deriva ni se mezcla en runtime. El "difuminado" de botones, sidebar y encabezados
+   de modal es una capa de transparencia blanco/negro superpuesta en el CSS (ver más abajo),
+   no un segundo color. --brand-header y --brand-button son las únicas que ThemeService
+   sobreescribe; el valor de acá es el default (paleta "purple", el look original) usado
+   antes de aplicar el tema y en las pantallas públicas (login, etc.) */
+:root {
+  /* Navbar, encabezados de modal, ConfirmDialog */
+  --brand-header: #1a1a2e;
+  /* Botones y acentos (íconos, badges, bordes, focus rings) */
+  --brand-button: #667eea;
+  --brand-button-rgb: 102, 126, 234;
+  /* Texto sobre --brand-header: FIJAS, ninguna paleta las cambia — todas usan header oscuro
+     + texto claro a propósito, es el único esquema de contraste que se garantiza */
+  --brand-header-text: #ffffff;
+  --brand-header-text-muted: #b0b3c5;
+  --brand-header-overlay-weak: rgba(255, 255, 255, 0.08);
+  --brand-header-overlay-strong: rgba(255, 255, 255, 0.12);
+}
+
+/* Reset básico */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: var(--font-family);
+  background-color: var(--surface-ground);
+  color: var(--text-color);
+}
+
+/* Utilidades */
+.w-full { width: 100%; }
+.mb-3 { margin-bottom: 0.75rem; }
+
+/* ===== Route Modal Global Styles ===== */
+.route-modal.p-dialog-mask {
+  backdrop-filter: blur(4px);
+}
+
+.route-modal .p-dialog {
+  border-radius: 24px !important;
+  overflow: hidden !important;
+  border: none !important;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.25) !important;
+  /* Sin esto, si el overflow:hidden de arriba no recorta bien (pasa con el panel de
+     PrimeNG), la esquina blanca cuadrada de este contenedor asoma detrás del header
+     redondeado. Con fondo transparente no hay nada que asome — el blanco real lo pone
+     .rm-body más abajo. */
+  background: transparent !important;
+  /* Si el modal crece más que la ventana (formularios largos, ej. Empresas con logo +
+     paleta de color), que no se corra pegado al borde/taskbar: limitar su alto total y
+     dejar que .rm-body (más abajo) sea la única zona que scrollea, con header y footer
+     siempre visibles */
+  max-height: 90vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.route-modal .p-dialog-content {
+  padding: 0 !important;
+  overflow: hidden !important;
+  /* .rm-header vive DENTRO de este elemento (es contenido proyectado), no dentro de
+     .p-dialog directamente — por eso también necesita fondo transparente, si no el
+     recorte redondeado de .rm-header deja ver el blanco de este contenedor en la
+     esquina, igual que pasaba con .p-dialog */
+  background: transparent !important;
+  /* Mismo motivo que en .p-dialog: hace de columna flex para que .rm-body sea el único
+     que crece/scrollea, no todo el modal */
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+}
+
+.route-modal .p-dialog-header {
+  display: none !important;
+}
+
+.rm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.75rem;
+  flex-shrink: 0;
+  /* Radio explícito en las esquinas superiores: no depender solo del overflow:hidden
+     del .p-dialog padre para que se vea redondeado */
+  border-radius: 24px 24px 0 0;
+  /* "Difuminado" sin cambiar el color: capa de sombra/luz encima del color exacto elegido */
+  background:
+    linear-gradient(135deg, rgba(0, 0, 0, 0.25), rgba(255, 255, 255, 0.08)),
+    var(--brand-header);
+}
+
+.rm-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--brand-header-text);
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.rm-title i { opacity: 0.8; }
+
+.rm-close {
+  background: var(--brand-header-overlay-weak);
+  border: none;
+  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand-header-text);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.rm-close:hover { background: var(--brand-header-overlay-strong); }
+
+.rm-body {
+  padding: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  background: #fff;
+  /* Única zona que scrollea cuando el formulario no cabe en la ventana */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.rm-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.rm-row.rm-three {
+  grid-template-columns: 1fr 0.5fr 0.5fr;
+}
+
+.rm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.rm-field label {
+  font-weight: 600;
+  font-size: 0.6875rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.rm-field input,
+.rm-field select {
+  width: 100%;
+  padding: 0.7rem 0.875rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  color: #1a1a2e;
+  background: #f9fafb;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+
+.rm-field input::placeholder { color: #b0b0c0; }
+
+.rm-field input:focus,
+.rm-field select:focus {
+  border-color: var(--brand-button);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(var(--brand-button-rgb), 0.12);
+}
+
+.rm-field select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%236b7280' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.875rem center;
+  padding-right: 2.5rem;
+}
+
+.rm-field input[type="number"] { -moz-appearance: textfield; }
+
+.rm-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.rm-switch-label {
+  font-weight: 600;
+  font-size: 0.6875rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.rm-toggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.rm-toggle input { opacity: 0; width: 0; height: 0; }
+
+.rm-toggle .rm-slider {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+  background: #d1d5db;
+  border-radius: 24px;
+  transition: background 0.2s;
+}
+
+.rm-toggle .rm-slider::before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  bottom: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.rm-toggle input:checked + .rm-slider { background: var(--brand-button); }
+.rm-toggle input:checked + .rm-slider::before { transform: translateX(20px); }
+
+.rm-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1.25rem 1.75rem;
+  background: #f8f9fc;
+  border-top: 1px solid #f0f0f5;
+  border-radius: 0 0 24px 24px;
+  flex-shrink: 0;
+}
+
+.rm-btn-cancel {
+  padding: 0.65rem 1.25rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  color: #6b7280;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.rm-btn-cancel:hover { border-color: #9ca3af; color: #374151; }
+
+.rm-btn-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.5rem;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  /* "Difuminado" sin cambiar el color: capa de brillo/sombra encima del color exacto elegido */
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(0, 0, 0, 0.15)),
+    var(--brand-button);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.rm-btn-save:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(var(--brand-button-rgb), 0.35);
+}
+
+.rm-btn-save:disabled { opacity: 0.7; cursor: not-allowed; }
+
+@media (max-width: 576px) {
+  .rm-row, .rm-row.rm-three { grid-template-columns: 1fr; }
+}
+
+/* ===== Role Modal extras ===== */
+.rm-field-single {
+  display: flex; flex-direction: column; gap: 0.375rem;
+}
+.rm-field-single label {
+  font-weight: 600; font-size: 0.6875rem; color: #6b7280;
+  text-transform: uppercase; letter-spacing: 0.6px;
+}
+.rm-field-single input,
+.rm-field-single select,
+.rm-field-single textarea {
+  width: 100%; padding: 0.7rem 0.875rem;
+  border: 2px solid #e5e7eb; border-radius: 10px;
+  font-size: 0.875rem; color: #1a1a2e; background: #f9fafb;
+  outline: none; box-sizing: border-box; font-family: inherit;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+  resize: vertical;
+}
+.rm-field-single input::placeholder,
+.rm-field-single textarea::placeholder { color: #b0b0c0; }
+.rm-field-single input:focus,
+.rm-field-single select:focus,
+.rm-field-single textarea:focus {
+  border-color: var(--brand-button); background: #fff;
+  box-shadow: 0 0 0 3px rgba(var(--brand-button-rgb), 0.12);
+}
+.rm-field-single select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%236b7280' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.875rem center;
+  padding-right: 2.5rem;
+}
+
+/* ===== Routes assignment modal ===== */
+.routes-body {
+  max-height: 400px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 0.25rem;
+}
+.routes-body::-webkit-scrollbar { width: 5px; }
+.routes-body::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+
+.route-check {
+  display: flex; align-items: center; gap: 0.625rem;
+  padding: 0.6rem 0.75rem; border-radius: 8px;
+  cursor: pointer; transition: background 0.15s;
+  user-select: none;
+}
+.route-check:hover { background: #f3f4f6; }
+.route-check.lvl-0 { padding-left: 0.75rem; }
+.route-check.lvl-1 { padding-left: 2rem; }
+.route-check.lvl-2 { padding-left: 3.25rem; }
+
+.route-check input[type="checkbox"] { display: none; }
+
+.check-box {
+  width: 20px; height: 20px; flex-shrink: 0;
+  border: 2px solid #d1d5db; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+  position: relative;
+}
+.check-box::after {
+  content: ''; display: none;
+  width: 5px; height: 9px;
+  border: solid #fff; border-width: 0 2px 2px 0;
+  transform: rotate(45deg); margin-top: -2px;
+}
+
+.route-check input:checked + .check-box {
+  background: var(--brand-button); border-color: var(--brand-button);
+}
+.route-check input:checked + .check-box::after { display: block; }
+
+.check-label { font-weight: 600; font-size: 0.875rem; color: #1a1a2e; }
+.check-path {
+  font-family: monospace; font-size: 0.75rem;
+  background: #f3f4f6; padding: 0.125rem 0.375rem;
+  border-radius: 4px; color: #6b7280; margin-left: auto;
+}
+
+.routes-count {
+  font-size: 0.8125rem; color: #6b7280; font-weight: 500; margin-right: auto;
+}
+
+/* ===== Confirm Dialog Global Styles ===== */
+/* Aplica automáticamente a todo <p-confirmDialog /> del sistema (deactivate, reassign-company, etc.) */
+.p-dialog-mask {
+  backdrop-filter: blur(2px);
+}
+
+.p-dialog.p-confirm-dialog {
+  border-radius: 24px !important;
+  overflow: hidden !important;
+  border: none !important;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.25) !important;
+  background: transparent !important;
+  max-width: 420px;
+}
+
+.p-confirm-dialog .p-dialog-header {
+  padding: 1.25rem 1.75rem !important;
+  border-radius: 24px 24px 0 0 !important;
+  background:
+    linear-gradient(135deg, rgba(0, 0, 0, 0.25), rgba(255, 255, 255, 0.08)),
+    var(--brand-header) !important;
+  border-bottom: none !important;
+}
+
+.p-confirm-dialog .p-dialog-title {
+  color: var(--brand-header-text) !important;
+  font-size: 1.0625rem;
+  font-weight: 700;
+}
+
+.p-confirm-dialog .p-dialog-header-icons .p-dialog-header-icon {
+  background: var(--brand-header-overlay-weak) !important;
+  border-radius: 8px !important;
+  width: 32px;
+  height: 32px;
+  color: var(--brand-header-text) !important;
+}
+
+.p-confirm-dialog .p-dialog-header-icons .p-dialog-header-icon:hover {
+  background: var(--brand-header-overlay-strong) !important;
+  color: var(--brand-header-text) !important;
+}
+
+.p-confirm-dialog .p-dialog-content {
+  padding: 1.75rem !important;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  background: #fff !important;
+}
+
+.p-confirm-dialog .p-confirm-dialog-icon {
+  flex-shrink: 0;
+  font-size: 1.25rem;
+  color: #f59e0b;
+  background: #fef3c7;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 !important;
+}
+
+.p-confirm-dialog .p-confirm-dialog-message {
+  margin: 0 !important;
+  font-size: 0.875rem;
+  color: #374151;
+  line-height: 1.5;
+  align-self: center;
+}
+
+.p-confirm-dialog .p-dialog-footer {
+  display: flex !important;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1.25rem 1.75rem !important;
+  background: #f8f9fc;
+  border-top: 1px solid #f0f0f5;
+  border-radius: 0 0 24px 24px;
+}
+
+.p-confirm-dialog .p-confirm-dialog-reject {
+  padding: 0.65rem 1.25rem;
+  border: 2px solid #e5e7eb !important;
+  border-radius: 10px !important;
+  background: #fff !important;
+  color: #6b7280 !important;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: border-color 0.15s;
+}
+
+.p-confirm-dialog .p-confirm-dialog-reject:hover {
+  border-color: #9ca3af !important;
+  color: #374151 !important;
+  background: #fff !important;
+}
+
+.p-confirm-dialog .p-confirm-dialog-accept {
+  padding: 0.65rem 1.5rem;
+  border: none !important;
+  border-radius: 10px !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(0, 0, 0, 0.15)),
+    var(--brand-button) !important;
+  color: #fff !important;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.p-confirm-dialog .p-confirm-dialog-accept:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(var(--brand-button-rgb), 0.35);
+}
+
+/* ===== Custom Toast ===== */
+.custom-toast.p-toast {
+  z-index: 99999;
+}
+
+.custom-toast .p-toast-message {
+  border-radius: 12px !important;
+  border: none !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12) !important;
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+}
+
+.custom-toast .p-toast-message-content {
+  padding: 1rem 1.25rem !important;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.custom-toast .p-toast-message-icon {
+  font-size: 1.25rem !important;
+  min-width: 2rem;
+  min-height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+.custom-toast .p-toast-summary {
+  font-weight: 700 !important;
+  font-size: 0.875rem !important;
+}
+
+.custom-toast .p-toast-detail {
+  font-size: 0.8125rem !important;
+  opacity: 0.85;
+  margin-top: 0.125rem !important;
+}
+
+.custom-toast .p-toast-icon-close {
+  border-radius: 8px !important;
+  width: 28px !important;
+  height: 28px !important;
+  transition: background 0.15s !important;
+}
+
+/* Success */
+.custom-toast .p-toast-message-success {
+  background: linear-gradient(135deg, #ecfdf5, #d1fae5) !important;
+  color: #065f46 !important;
+}
+.custom-toast .p-toast-message-success .p-toast-message-icon {
+  background: #059669; color: #fff;
+}
+.custom-toast .p-toast-message-success .p-toast-icon-close {
+  color: #065f46 !important;
+}
+.custom-toast .p-toast-message-success .p-toast-icon-close:hover {
+  background: rgba(6, 95, 70, 0.1) !important;
+}
+
+/* Error */
+.custom-toast .p-toast-message-error {
+  background: linear-gradient(135deg, #fef2f2, #fee2e2) !important;
+  color: #991b1b !important;
+}
+.custom-toast .p-toast-message-error .p-toast-message-icon {
+  background: #dc2626; color: #fff;
+}
+.custom-toast .p-toast-message-error .p-toast-icon-close {
+  color: #991b1b !important;
+}
+.custom-toast .p-toast-message-error .p-toast-icon-close:hover {
+  background: rgba(153, 27, 27, 0.1) !important;
+}
+
+/* Warn */
+.custom-toast .p-toast-message-warn {
+  background: linear-gradient(135deg, #fffbeb, #fef3c7) !important;
+  color: #92400e !important;
+}
+.custom-toast .p-toast-message-warn .p-toast-message-icon {
+  background: #f59e0b; color: #fff;
+}
+.custom-toast .p-toast-message-warn .p-toast-icon-close {
+  color: #92400e !important;
+}
+
+/* Info */
+.custom-toast .p-toast-message-info {
+  background: linear-gradient(135deg, #eff6ff, #dbeafe) !important;
+  color: #1e40af !important;
+}
+.custom-toast .p-toast-message-info .p-toast-message-icon {
+  background: #3b82f6; color: #fff;
+}
+.custom-toast .p-toast-message-info .p-toast-icon-close {
+  color: #1e40af !important;
+}
