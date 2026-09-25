@@ -1,18 +1,22 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Observable, forkJoin, of } from 'rxjs';
 import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { DialogModule } from 'primeng/dialog';
 import { ConfirmationService } from 'primeng/api';
+import { HasPermissionDirective } from '../../../../shared/directives/has-permission.directive';
 import { RolesService } from '../../services/roles.service';
 import { NavRoutesService } from '../../../nav-routes/services/nav-routes.service';
 import { CompaniesService } from '../../../companies/services/companies.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { IRole } from '../../../../core/models/role.models';
 import { INavigationRoute } from '../../../../core/models/navigation.models';
+import { IPermission } from '../../../../core/models/permission.models';
 import { NotificationService } from '../../../../core/services/notification.service';
+import { PermissionsService } from '../../../../core/services/permissions.service';
 
 interface IRoleGroup {
   companyId: number;
@@ -23,7 +27,7 @@ interface IRoleGroup {
 @Component({
   selector: 'app-role-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, TableModule, ButtonModule, ConfirmDialogModule, DialogModule],
+  imports: [CommonModule, FormsModule, TableModule, ButtonModule, ConfirmDialogModule, DialogModule, HasPermissionDirective],
   providers: [ConfirmationService],
   templateUrl: './role-list.component.html',
   styleUrl: './role-list.component.scss'
@@ -31,6 +35,7 @@ interface IRoleGroup {
 export class RoleListComponent implements OnInit {
   private readonly rolesService = inject(RolesService);
   private readonly navService = inject(NavRoutesService);
+  private readonly permissionsService = inject(PermissionsService);
   private readonly companiesService = inject(CompaniesService);
   private readonly confirmService = inject(ConfirmationService);
   private readonly notify = inject(NotificationService);
@@ -49,13 +54,38 @@ export class RoleListComponent implements OnInit {
   /** Empresa destino al crear desde el botón "+" de un grupo (null = mi empresa) */
   createCompanyId: number | null = null;
 
-  // Routes modal
-  showRoutesModal = false;
-  savingRoutes = signal(false);
-  routesRoleId = 0;
-  routesRoleName = '';
+  // ===== Modal combinado: rutas (ventanas) + permisos de acción, cada acción debajo de su ventana =====
+  showAccessModal = false;
+  savingAccess = signal(false);
+  accessRoleId = 0;
+  accessRoleName = '';
   allRoutes = signal<INavigationRoute[]>([]);
   selectedRouteIds = signal<Set<number>>(new Set());
+  allPermissions = signal<IPermission[]>([]);
+  selectedPermissionIds = signal<Set<number>>(new Set());
+
+  /** Solo se ve/edita si el usuario logueado tiene este permiso — si no, el modal muestra solo rutas */
+  readonly canAssignPermissions = computed(() => this.permissionsService.has('ROLES.ASSIGN_PERMISSIONS'));
+
+  /**
+   * Catálogo plano indexado por `windowId` (mismo valor que `NavigationRoute.windowId`) — es la
+   * llave que realmente vincula un permiso con su ventana en el backend, no el texto de `windowName`
+   * (que es libre y no hay garantía de que calce con lo que se muestre en otro lado).
+   */
+  private readonly permissionsByWindow = computed<Map<string, IPermission[]>>(() => {
+    const byWindow = new Map<string, IPermission[]>();
+    for (const permission of this.allPermissions()) {
+      const list = byWindow.get(permission.windowId) ?? [];
+      list.push(permission);
+      byWindow.set(permission.windowId, list);
+    }
+    return byWindow;
+  });
+
+  /** Acciones de esa ventana, para mostrarlas anidadas debajo de su ruta en el árbol */
+  actionsFor(windowId: string): IPermission[] {
+    return this.permissionsByWindow().get(windowId) ?? [];
+  }
 
   ngOnInit(): void {
     if (this.authService.isSystemAdmin()) {
@@ -148,20 +178,30 @@ export class RoleListComponent implements OnInit {
     });
   }
 
-  // ===== Route assignment =====
-  onManageRoutes(role: IRole): void {
-    this.routesRoleId = role.id;
-    this.routesRoleName = role.name;
+  // ===== Rutas + permisos de acción, en un solo modal =====
+  /** `canAssignPermissions()` decide si además del árbol de rutas se piden y muestran los permisos */
+  onManageAccess(role: IRole): void {
+    this.accessRoleId = role.id;
+    this.accessRoleName = role.name;
     this.selectedRouteIds.set(new Set(role.routeIds || []));
 
-    this.navService.getTree().subscribe({
-      next: (tree) => {
+    const showPermissions = this.canAssignPermissions();
+    const requests: [Observable<INavigationRoute[]>, Observable<IPermission[]>, Observable<IPermission[]>] = [
+      this.navService.getTree(),
+      showPermissions ? this.permissionsService.getCatalog() : of([]),
+      showPermissions ? this.rolesService.getPermissions(role.id) : of([])
+    ];
+
+    forkJoin(requests).subscribe({
+      next: ([tree, catalog, granted]) => {
         // Para admin de sistema el árbol trae todas las empresas mezcladas; acotarlo a la del rol
         const scoped = role.companyId != null ? tree.filter((r) => r.companyId === role.companyId) : tree;
         this.allRoutes.set(scoped);
-        this.showRoutesModal = true;
+        this.allPermissions.set(catalog);
+        this.selectedPermissionIds.set(new Set(granted.map((p) => p.id)));
+        this.showAccessModal = true;
       },
-      error: () => this.msg('error', 'No se pudieron cargar las rutas')
+      error: (e) => this.msgErr(e)
     });
   }
 
@@ -177,11 +217,30 @@ export class RoleListComponent implements OnInit {
     return this.selectedRouteIds().has(id);
   }
 
-  onSaveRoutes(): void {
-    this.savingRoutes.set(true);
-    this.rolesService.assignRoutes(this.routesRoleId, { routeIds: [...this.selectedRouteIds()] }).subscribe({
-      next: () => { this.savingRoutes.set(false); this.showRoutesModal = false; this.msg('success', 'Rutas asignadas'); this.loadRoles(); },
-      error: (e) => { this.savingRoutes.set(false); this.msgErr(e); }
+  togglePermission(id: number): void {
+    this.selectedPermissionIds.update((set) => {
+      const next = new Set(set);
+      if (next.has(id)) { next.delete(id); } else { next.add(id); }
+      return next;
+    });
+  }
+
+  isPermissionSelected(id: number): boolean {
+    return this.selectedPermissionIds().has(id);
+  }
+
+  onSaveAccess(): void {
+    this.savingAccess.set(true);
+    const requests: Observable<void>[] = [
+      this.rolesService.assignRoutes(this.accessRoleId, { routeIds: [...this.selectedRouteIds()] })
+    ];
+    if (this.canAssignPermissions()) {
+      requests.push(this.rolesService.assignPermissions(this.accessRoleId, { permissionIds: [...this.selectedPermissionIds()] }));
+    }
+
+    forkJoin(requests).subscribe({
+      next: () => { this.savingAccess.set(false); this.showAccessModal = false; this.msg('success', 'Accesos actualizados'); this.loadRoles(); },
+      error: (e) => { this.savingAccess.set(false); this.msgErr(e); }
     });
   }
 

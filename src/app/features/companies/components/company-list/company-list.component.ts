@@ -5,6 +5,7 @@ import { TableModule } from 'primeng/table';
 import { DialogModule } from 'primeng/dialog';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ConfirmationService } from 'primeng/api';
+import { HasPermissionDirective } from '../../../../shared/directives/has-permission.directive';
 import { CompaniesService } from '../../services/companies.service';
 import { ICompany, ICompanyRequest } from '../../../../core/models/company.models';
 import { NotificationService } from '../../../../core/services/notification.service';
@@ -52,7 +53,7 @@ const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 @Component({
   selector: 'app-company-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, TableModule, DialogModule, ConfirmDialogModule],
+  imports: [CommonModule, FormsModule, TableModule, DialogModule, ConfirmDialogModule, HasPermissionDirective],
   providers: [ConfirmationService],
   templateUrl: './company-list.component.html',
   styleUrl: './company-list.component.scss'

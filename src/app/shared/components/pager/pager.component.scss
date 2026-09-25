@@ -1,0 +1,16 @@
+.pager {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;
+  padding: 1rem 1.5rem; border-top: 1px solid #f0f0f5;
+  &.hidden { display: none; }
+}
+.pager-range { font-size: 0.8125rem; color: #8c8c9e; font-weight: 500; }
+.pager-buttons { display: flex; align-items: center; gap: 0.75rem; }
+.pager-page { font-size: 0.8125rem; color: #6b7280; font-weight: 500; white-space: nowrap; }
+.pager-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border: 2px solid #e5e7eb; border-radius: 8px;
+  background: #fff; color: #374151; cursor: pointer; transition: border-color 0.15s, color 0.15s;
+  i { font-size: 0.75rem; }
+  &:hover:not(:disabled) { border-color: var(--brand-button); color: var(--brand-button); }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+}

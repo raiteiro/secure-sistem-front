@@ -1,0 +1,221 @@
+<div class="page-header">
+  <div class="header-left">
+    <i class="pi pi-replay header-icon"></i>
+    <div><h2>Devoluciones</h2><span class="subtitle">Reembolsos sobre ventas completadas</span></div>
+  </div>
+  @if (!sessionLoading() && !currentSession()) {
+    <div class="session-warning">
+      <i class="pi pi-exclamation-triangle"></i>
+      <span>Necesitas tu propio turno de caja abierto para procesar devoluciones</span>
+      <button class="btn-link" (click)="goToCashSessions()">Abrir turno</button>
+    </div>
+  } @else {
+    <button class="btn-primary" *appHasPermission="'RETURNS.REGISTER'" (click)="onOpenNewReturn()" [disabled]="sessionLoading()">
+      <i class="pi pi-plus"></i> Nueva devolución
+    </button>
+  }
+</div>
+
+<div class="filters-bar">
+  <input type="date" class="filter-date" [(ngModel)]="historyFilterFrom" (ngModelChange)="onFilterChange()" title="Desde" />
+  <input type="date" class="filter-date" [(ngModel)]="historyFilterTo" (ngModelChange)="onFilterChange()" title="Hasta" />
+</div>
+
+<!-- MODAL: Nueva devolución -->
+<p-dialog [(visible)]="showNewModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '620px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi pi-replay"></i> Nueva devolución</div>
+    <button class="rm-close" (click)="showNewModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    @if (!foundSale()) {
+      <div class="rm-field-single">
+        <label>Folio de venta</label>
+        <input
+          type="number"
+          min="1"
+          [(ngModel)]="folioSearch"
+          placeholder="ej: 12"
+          (keyup.enter)="onSearchSale()"
+        />
+      </div>
+      <button class="btn-secondary" (click)="onSearchSale()" [disabled]="searchingSale()">
+        @if (searchingSale()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-search"></i> }
+        Buscar venta
+      </button>
+    } @else {
+      <div class="sale-summary">
+        <div>
+          <span class="sale-summary-folio">Folio #{{ foundSale()!.folioNumber }}</span>
+          <span class="sale-summary-sub">{{ foundSale()!.createdAt | date: 'short' }} — {{ foundSale()!.customerName || 'Cliente ocasional' }}</span>
+        </div>
+        <div class="sale-summary-total">{{ foundSale()!.total | number: '1.2-2' }}</div>
+        <button class="btn-link" (click)="onSearchAnotherSale()">Buscar otra venta</button>
+      </div>
+
+      <table class="return-items-table">
+        <thead>
+          <tr><th>Producto</th><th style="text-align: right">Vendido</th><th style="width: 100px">A devolver</th></tr>
+        </thead>
+        <tbody>
+          @for (line of returnLines(); track line.saleItemId) {
+            <tr>
+              <td>
+                <span class="cart-product-name">{{ line.productName }}</span>
+                <span class="cart-product-sku">{{ line.productSku || '—' }}</span>
+              </td>
+              <td style="text-align: right">{{ line.maxQuantity | number: '1.0-4' }}</td>
+              <td>
+                <input
+                  type="number"
+                  class="cart-input"
+                  min="0"
+                  [max]="line.maxQuantity"
+                  step="any"
+                  [ngModel]="line.quantity"
+                  (ngModelChange)="onChangeLineQuantity(line.saleItemId, $event)"
+                />
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <div class="rm-row">
+        <div class="rm-field">
+          <label>Método de reembolso</label>
+          <select [(ngModel)]="returnForm.refundMethod">
+            <option value="Cash">Efectivo</option>
+            <option value="Card">Tarjeta</option>
+            <option value="Other">Otro</option>
+          </select>
+        </div>
+      </div>
+      <div class="rm-field-single">
+        <label>Motivo (opcional)</label>
+        <textarea [(ngModel)]="returnForm.reason" rows="2" maxlength="500" placeholder="ej: Cliente cambió de opinión"></textarea>
+      </div>
+    }
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showNewModal = false">Cancelar</button>
+    @if (foundSale()) {
+      <button class="rm-btn-save" (click)="onSaveReturn()" [disabled]="saving()">
+        @if (saving()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+        Registrar devolución
+      </button>
+    }
+  </div>
+</p-dialog>
+
+<!-- MODAL: Detalle de devolución -->
+<p-dialog [(visible)]="showDetailModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '560px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi pi-eye"></i> Detalle de devolución</div>
+    <button class="rm-close" (click)="showDetailModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    @if (detailReturn; as ret) {
+      <p class="modal-item-label">Folio de venta #{{ ret.saleFolioNumber }}</p>
+      <p class="modal-item-sublabel">
+        {{ ret.createdAt | date: 'short' }} — {{ refundMethodLabels[ret.refundMethod] }} — {{ ret.username }}
+      </p>
+      @if (ret.reason) { <p class="modal-item-sublabel">Motivo: {{ ret.reason }}</p> }
+
+      <table class="return-items-table">
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th style="text-align: right">Cant.</th>
+            <th style="text-align: right">Subtotal</th>
+            <th style="text-align: right">Impuesto</th>
+            <th style="text-align: right">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of ret.items; track item.id) {
+            <tr>
+              <td>
+                <span class="cart-product-name">{{ item.productName }}</span>
+                <span class="cart-product-sku">{{ item.productSku || '—' }}</span>
+              </td>
+              <td style="text-align: right">{{ item.quantity | number: '1.0-4' }}</td>
+              <td style="text-align: right">{{ item.subtotal | number: '1.2-2' }}</td>
+              <td style="text-align: right">{{ item.taxAmount | number: '1.2-2' }}</td>
+              <td style="text-align: right">{{ item.total | number: '1.2-2' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <div class="detail-totals">
+        <div><span>Subtotal reembolsado</span><span>{{ ret.subtotalRefunded | number: '1.2-2' }}</span></div>
+        <div><span>Impuesto reembolsado</span><span>{{ ret.taxRefunded | number: '1.2-2' }}</span></div>
+        <div class="grand-total"><span>Total reembolsado</span><span>{{ ret.totalRefunded | number: '1.2-2' }}</span></div>
+      </div>
+    }
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showDetailModal = false">Cerrar</button>
+  </div>
+</p-dialog>
+
+@if (loading()) {
+  <div class="table-card"><div class="empty-state"><i class="pi pi-spinner pi-spin"></i><p>Cargando devoluciones...</p></div></div>
+} @else if (returns().length === 0) {
+  <div class="table-card"><div class="empty-state"><i class="pi pi-replay"></i><p>No hay devoluciones registradas</p></div></div>
+} @else {
+  @for (group of returnGroups(); track group.companyId) {
+    <div class="company-group">
+      @if (authService.isSystemAdmin()) {
+        <div class="company-group-header">
+          <i class="pi pi-building"></i>
+          <span class="company-group-name">{{ group.companyName }}</span>
+        </div>
+      }
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <span class="sale-count">{{ group.returns.length }} devolución(es)</span>
+        </div>
+        <div class="table-scroll">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Folio venta</th>
+                <th>Fecha</th>
+                <th>Almacén</th>
+                <th>Método</th>
+                <th>Motivo</th>
+                <th style="text-align: right">Total reembolsado</th>
+                <th>Usuario</th>
+                <th style="text-align: center; width: 60px"></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (ret of group.returns; track ret.id) {
+                <tr>
+                  <td class="folio-cell">#{{ ret.saleFolioNumber }}</td>
+                  <td>{{ ret.createdAt | date: 'short' }}</td>
+                  <td>{{ ret.warehouseName }}</td>
+                  <td>{{ refundMethodLabels[ret.refundMethod] }}</td>
+                  <td class="notes-cell">{{ ret.reason || '—' }}</td>
+                  <td style="text-align: right">{{ ret.totalRefunded | number: '1.2-2' }}</td>
+                  <td>{{ ret.username }}</td>
+                  <td style="text-align: center">
+                    <button class="action-btn history" (click)="onViewDetail(ret)" title="Ver detalle"><i class="pi pi-eye"></i></button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  }
+  <div class="table-card">
+    <app-pager [page]="page()" [totalPages]="totalPages()" [totalCount]="totalCount()" [pageSize]="pageSize" (pageChange)="onPageChange($event)" />
+  </div>
+}

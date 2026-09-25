@@ -8,6 +8,7 @@ import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { TooltipModule } from 'primeng/tooltip';
 import { DialogModule } from 'primeng/dialog';
 import { ConfirmationService } from 'primeng/api';
+import { HasPermissionDirective } from '../../../../shared/directives/has-permission.directive';
 import { UsersService } from '../../services/users.service';
 import { RolesService } from '../../../roles/services/roles.service';
 import { CompaniesService } from '../../../companies/services/companies.service';
@@ -69,7 +70,8 @@ interface IUserGroup {
     InputTextModule,
     ConfirmDialogModule,
     TooltipModule,
-    DialogModule
+    DialogModule,
+    HasPermissionDirective
   ],
   providers: [ConfirmationService],
   templateUrl: './user-list.component.html',

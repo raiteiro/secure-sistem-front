@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { IRole, ICreateRoleRequest, IUpdateRoleRequest, IAssignRoutesRequest } from '../../../core/models/role.models';
 import { INavigationRoute } from '../../../core/models/navigation.models';
+import { IAssignPermissionsRequest, IPermission } from '../../../core/models/permission.models';
 
 @Injectable({ providedIn: 'root' })
 export class RolesService {
@@ -36,5 +37,15 @@ export class RolesService {
 
   assignRoutes(id: number, request: IAssignRoutesRequest): Observable<void> {
     return this.http.post<void>(`${this.apiUrl}/${id}/routes`, request);
+  }
+
+  /** Permisos de acción ya asignados a este rol (ver PERMISSIONS.md) */
+  getPermissions(id: number): Observable<IPermission[]> {
+    return this.http.get<IPermission[]>(`${this.apiUrl}/${id}/permissions`);
+  }
+
+  /** Reemplazo completo de los permisos del rol por la lista de ids dada */
+  assignPermissions(id: number, request: IAssignPermissionsRequest): Observable<void> {
+    return this.http.post<void>(`${this.apiUrl}/${id}/permissions`, request);
   }
 }

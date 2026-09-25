@@ -1,0 +1,295 @@
+<div class="page-header">
+  <div class="header-left">
+    <i class="pi pi-chart-bar header-icon"></i>
+    <div><h2>Reportes</h2><span class="subtitle">Ventas, productos y cortes de caja</span></div>
+  </div>
+</div>
+
+<div class="tabs-bar">
+  <button class="tab-btn" [class.active]="activeTab() === 'sales'" (click)="selectTab('sales')">
+    <i class="pi pi-calendar"></i> Ventas por periodo
+  </button>
+  <button class="tab-btn" [class.active]="activeTab() === 'products'" (click)="selectTab('products')">
+    <i class="pi pi-star"></i> Productos más vendidos
+  </button>
+  <button class="tab-btn" [class.active]="activeTab() === 'closeouts'" (click)="selectTab('closeouts')">
+    <i class="pi pi-wallet"></i> Cortes de caja
+  </button>
+</div>
+
+<!-- ===== Ventas por periodo ===== -->
+@if (activeTab() === 'sales') {
+  <div class="filters-bar">
+    <div class="filter-field">
+      <label>Desde</label>
+      <input type="date" class="filter-date" [(ngModel)]="salesFilters.from" (ngModelChange)="loadSalesByPeriod()" />
+    </div>
+    <div class="filter-field">
+      <label>Hasta</label>
+      <input type="date" class="filter-date" [(ngModel)]="salesFilters.to" (ngModelChange)="loadSalesByPeriod()" />
+    </div>
+    <div class="filter-field">
+      <label>Sucursal</label>
+      <select class="filter-select" [(ngModel)]="salesFilters.branchId" (ngModelChange)="loadSalesByPeriod()">
+        <option [ngValue]="null">Todas</option>
+        @for (branch of branches(); track branch.id) {
+          <option [ngValue]="branch.id">{{ branch.name }}</option>
+        }
+      </select>
+    </div>
+    <div class="filter-field">
+      <label>Agrupar por</label>
+      <select class="filter-select" [(ngModel)]="salesFilters.groupBy" (ngModelChange)="loadSalesByPeriod()">
+        <option value="day">Día</option>
+        <option value="month">Mes</option>
+      </select>
+    </div>
+  </div>
+
+  @if (salesLoading()) {
+    <div class="table-card"><div class="empty-state"><i class="pi pi-spinner pi-spin"></i><p>Cargando reporte...</p></div></div>
+  } @else {
+    @if (salesReport(); as report) {
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-icon"><i class="pi pi-shopping-cart"></i></div>
+          <div class="stat-info"><span class="stat-value">{{ report.totalSalesCount | number: '1.0-0' }}</span><span class="stat-label">Ventas</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon"><i class="pi pi-dollar"></i></div>
+          <div class="stat-info"><span class="stat-value">{{ report.totalAmount | number: '1.2-2' }}</span><span class="stat-label">Monto total</span></div>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <span class="result-count">{{ report.periods.length }} periodo(s) — {{ report.from }} a {{ report.to }}</span>
+        </div>
+        <div class="table-scroll">
+          @if (report.periods.length === 0) {
+            <div class="empty-state"><i class="pi pi-chart-bar"></i><p>No hay ventas en este rango</p></div>
+          } @else {
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th style="width: 40px"></th>
+                  <th>Periodo</th>
+                  <th style="text-align: right">Ventas</th>
+                  <th style="text-align: right">Monto total</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of report.periods; track row.period) {
+                  <tr
+                    [class.expandable-row]="canExpandPeriod(row)"
+                    (click)="canExpandPeriod(row) && togglePeriod(row.period)"
+                  >
+                    <td style="text-align: center">
+                      @if (canExpandPeriod(row)) {
+                        <i class="pi expand-toggle" [class.pi-chevron-down]="isPeriodExpanded(row.period)" [class.pi-chevron-right]="!isPeriodExpanded(row.period)"></i>
+                      }
+                    </td>
+                    <td class="folio-cell">{{ row.period }}</td>
+                    <td style="text-align: right">{{ row.salesCount | number: '1.0-0' }}</td>
+                    <td style="text-align: right">{{ row.totalAmount | number: '1.2-2' }}</td>
+                  </tr>
+                  @if (canExpandPeriod(row) && isPeriodExpanded(row.period)) {
+                    <tr class="expanded-detail-row">
+                      <td colspan="4">
+                        <table class="nested-products-table">
+                          <thead>
+                            <tr>
+                              <th>Producto</th>
+                              <th style="text-align: right" title="Promedio ponderado por cantidad si el precio cambió dentro del rango">Precio unit.</th>
+                              <th style="text-align: right">Cant. vendida</th>
+                              <th style="text-align: right">Subtotal</th>
+                              <th style="text-align: right">Impuesto</th>
+                              <th style="text-align: right">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (product of row.products; track product.productId) {
+                              <tr>
+                                <td>
+                                  <span class="cart-product-name">{{ product.productName }}</span>
+                                  <span class="cart-product-sku">{{ product.sku || '—' }}</span>
+                                </td>
+                                <td style="text-align: right">{{ product.unitPrice | number: '1.2-2' }}</td>
+                                <td style="text-align: right">{{ product.quantitySold | number: '1.0-4' }}</td>
+                                <td style="text-align: right">{{ subtotalOf(product) | number: '1.2-2' }}</td>
+                                <td style="text-align: right">{{ product.taxAmount | number: '1.2-2' }}</td>
+                                <td style="text-align: right">{{ product.revenue | number: '1.2-2' }}</td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>
+                  }
+                }
+              </tbody>
+            </table>
+          }
+        </div>
+      </div>
+    }
+  }
+}
+
+<!-- ===== Productos más vendidos ===== -->
+@if (activeTab() === 'products') {
+  <div class="filters-bar">
+    <div class="filter-field">
+      <label>Desde</label>
+      <input type="date" class="filter-date" [(ngModel)]="productsFilters.from" (ngModelChange)="loadTopProducts()" />
+    </div>
+    <div class="filter-field">
+      <label>Hasta</label>
+      <input type="date" class="filter-date" [(ngModel)]="productsFilters.to" (ngModelChange)="loadTopProducts()" />
+    </div>
+    <div class="filter-field">
+      <label>Sucursal</label>
+      <select class="filter-select" [(ngModel)]="productsFilters.branchId" (ngModelChange)="loadTopProducts()">
+        <option [ngValue]="null">Todas</option>
+        @for (branch of branches(); track branch.id) {
+          <option [ngValue]="branch.id">{{ branch.name }}</option>
+        }
+      </select>
+    </div>
+    <div class="filter-field">
+      <label>Límite</label>
+      <input type="number" class="filter-number" min="1" max="100" [(ngModel)]="productsFilters.limit" (ngModelChange)="loadTopProducts()" />
+    </div>
+  </div>
+
+  @if (productsLoading()) {
+    <div class="table-card"><div class="empty-state"><i class="pi pi-spinner pi-spin"></i><p>Cargando reporte...</p></div></div>
+  } @else if (topProducts().length === 0) {
+    <div class="table-card"><div class="empty-state"><i class="pi pi-star"></i><p>No hay productos vendidos en este rango</p></div></div>
+  } @else {
+    <div class="table-card">
+      <div class="table-toolbar">
+        <span class="result-count">{{ topProducts().length }} producto(s)</span>
+      </div>
+      <div class="table-scroll">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th style="width: 48px">#</th>
+              <th>Producto</th>
+              <th style="text-align: right" title="Promedio ponderado por cantidad si el precio cambió dentro del rango">Precio unit.</th>
+              <th style="text-align: right">Cant. vendida</th>
+              <th style="text-align: right">Subtotal</th>
+              <th style="text-align: right">Impuesto</th>
+              <th style="text-align: right">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (product of topProducts(); track product.productId; let i = $index) {
+              <tr>
+                <td>{{ i + 1 }}</td>
+                <td>
+                  <span class="cart-product-name">{{ product.productName }}</span>
+                  <span class="cart-product-sku">{{ product.sku || '—' }}</span>
+                </td>
+                <td style="text-align: right">{{ product.unitPrice | number: '1.2-2' }}</td>
+                <td style="text-align: right">{{ product.quantitySold | number: '1.0-4' }}</td>
+                <td style="text-align: right">{{ subtotalOf(product) | number: '1.2-2' }}</td>
+                <td style="text-align: right">{{ product.taxAmount | number: '1.2-2' }}</td>
+                <td style="text-align: right">{{ product.revenue | number: '1.2-2' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+}
+
+<!-- ===== Cortes de caja ===== -->
+@if (activeTab() === 'closeouts') {
+  <div class="filters-bar">
+    <div class="filter-field">
+      <label>Desde</label>
+      <input type="date" class="filter-date" [(ngModel)]="closeoutsFilters.from" (ngModelChange)="loadCashierCloseouts()" />
+    </div>
+    <div class="filter-field">
+      <label>Hasta</label>
+      <input type="date" class="filter-date" [(ngModel)]="closeoutsFilters.to" (ngModelChange)="loadCashierCloseouts()" />
+    </div>
+    <div class="filter-field">
+      <label>Sucursal</label>
+      <select class="filter-select" [(ngModel)]="closeoutsFilters.branchId" (ngModelChange)="loadCashierCloseouts()">
+        <option [ngValue]="null">Todas</option>
+        @for (branch of branches(); track branch.id) {
+          <option [ngValue]="branch.id">{{ branch.name }}</option>
+        }
+      </select>
+    </div>
+    <div class="filter-field">
+      <label>Usuario</label>
+      <select class="filter-select" [(ngModel)]="closeoutsFilters.userId" (ngModelChange)="loadCashierCloseouts()">
+        <option [ngValue]="null">Todos</option>
+        @for (user of users(); track user.id) {
+          <option [ngValue]="user.id">{{ user.username }}</option>
+        }
+      </select>
+    </div>
+  </div>
+
+  @if (closeoutsLoading()) {
+    <div class="table-card"><div class="empty-state"><i class="pi pi-spinner pi-spin"></i><p>Cargando reporte...</p></div></div>
+  } @else if (closeouts().length === 0) {
+    <div class="table-card"><div class="empty-state"><i class="pi pi-wallet"></i><p>No hay cortes de caja en este rango</p></div></div>
+  } @else {
+    <div class="table-card">
+      <div class="table-toolbar">
+        <span class="result-count">{{ closeouts().length }} corte(s)</span>
+      </div>
+      <div class="table-scroll">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Usuario</th>
+              <th>Caja</th>
+              <th>Sucursal</th>
+              <th>Abierto</th>
+              <th>Cerrado</th>
+              <th style="text-align: right">Ventas</th>
+              <th style="text-align: right">Apertura</th>
+              <th style="text-align: right">Efectivo</th>
+              <th style="text-align: right">Tarjeta</th>
+              <th style="text-align: right">Otro</th>
+              <th style="text-align: right">Devoluciones</th>
+              <th style="text-align: right">Esperado</th>
+              <th style="text-align: right">Cierre</th>
+              <th style="text-align: right">Diferencia</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of closeouts(); track row.cashSessionId) {
+              <tr>
+                <td class="folio-cell">{{ row.username }}</td>
+                <td>{{ row.cashRegisterName }}</td>
+                <td>{{ row.branchName }}</td>
+                <td>{{ row.openedAt | date: 'short' }}</td>
+                <td>{{ row.closedAt | date: 'short' }}</td>
+                <td style="text-align: right">{{ row.salesCount | number: '1.0-0' }}</td>
+                <td style="text-align: right">{{ row.openingAmount | number: '1.2-2' }}</td>
+                <td style="text-align: right">{{ row.cashSalesTotal | number: '1.2-2' }}</td>
+                <td style="text-align: right">{{ row.cardSalesTotal | number: '1.2-2' }}</td>
+                <td style="text-align: right">{{ row.otherSalesTotal | number: '1.2-2' }}</td>
+                <td style="text-align: right">{{ row.refundsTotal | number: '1.2-2' }}</td>
+                <td style="text-align: right">{{ row.expectedAmount | number: '1.2-2' }}</td>
+                <td style="text-align: right">{{ row.closingAmount | number: '1.2-2' }}</td>
+                <td style="text-align: right" [class.positive]="row.difference > 0" [class.negative]="row.difference < 0">
+                  {{ row.difference | number: '1.2-2' }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+}

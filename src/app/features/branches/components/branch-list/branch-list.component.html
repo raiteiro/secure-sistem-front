@@ -1,0 +1,126 @@
+<p-confirmDialog />
+
+<div class="page-header">
+  <div class="header-left">
+    <i class="pi pi-map-marker header-icon"></i>
+    <div><h2>Sucursales</h2><span class="subtitle">Gestión de sucursales</span></div>
+  </div>
+  <button class="btn-primary" *appHasPermission="'BRANCHES.CREATE'" (click)="onCreate()"><i class="pi pi-plus"></i> Nueva sucursal</button>
+</div>
+
+<!-- MODAL: Crear/Editar Sucursal -->
+<p-dialog [(visible)]="showModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '460px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi" [class.pi-plus-circle]="!isEdit()" [class.pi-pencil]="isEdit()"></i> {{ isEdit() ? 'Editar Sucursal' : 'Nueva Sucursal' }}</div>
+    <button class="rm-close" (click)="showModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    <div class="rm-field-single">
+      <label>Nombre *</label>
+      <input type="text" [(ngModel)]="form.name" placeholder="ej: Sucursal Centro" />
+    </div>
+    <div class="rm-field-single">
+      <label>Dirección</label>
+      <input type="text" [(ngModel)]="form.address" placeholder="Calle, número, colonia..." />
+    </div>
+    <div class="rm-field-single">
+      <label>Teléfono</label>
+      <input type="text" [(ngModel)]="form.phone" placeholder="5551234567" />
+    </div>
+    @if (!isEdit() && authService.isSystemAdmin()) {
+      <div class="rm-field-single">
+        <label>Empresa</label>
+        <select [(ngModel)]="form.companyId">
+          <option [ngValue]="null">Mi empresa (por defecto)</option>
+          @for (company of companies(); track company.id) {
+            <option [ngValue]="company.id">{{ company.name }}</option>
+          }
+        </select>
+      </div>
+    }
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showModal = false">Cancelar</button>
+    <button class="rm-btn-save" (click)="onSave()" [disabled]="saving()">
+      @if (saving()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+      {{ isEdit() ? 'Actualizar' : 'Crear' }}
+    </button>
+  </div>
+</p-dialog>
+
+@for (group of branchGroups(); track group.companyId) {
+  <div class="company-group">
+    @if (authService.isSystemAdmin()) {
+      <div class="company-group-header">
+        <i class="pi pi-building"></i>
+        <span class="company-group-name">{{ group.companyName }}</span>
+        <button class="group-add-btn" *appHasPermission="'BRANCHES.CREATE'" (click)="onCreate(group.companyId)" title="Nueva sucursal en esta empresa">
+          <i class="pi pi-plus"></i>
+        </button>
+      </div>
+    }
+
+    <div class="table-card">
+      <div class="table-toolbar">
+        <div class="search-box">
+          <i class="pi pi-search"></i>
+          <input
+            type="text"
+            placeholder="Buscar por nombre, dirección..."
+            (input)="dt.filterGlobal($any($event.target).value, 'contains')"
+          />
+        </div>
+        <span class="branch-count">{{ group.branches.length }} sucursal(es)</span>
+      </div>
+
+      <p-table #dt [value]="group.branches" [loading]="loading()" [rowHover]="true"
+        [globalFilterFields]="['name', 'address', 'phone']" styleClass="p-datatable-sm">
+        <ng-template pTemplate="header">
+          <tr>
+            <th pSortableColumn="name">Nombre <p-sortIcon field="name" /></th>
+            <th>Dirección</th>
+            <th>Teléfono</th>
+            <th>Almacén</th>
+            <th style="text-align: center; width: 12%">Acciones</th>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-branch>
+          <tr>
+            <td><span class="branch-name"><i class="pi pi-map-marker"></i> {{ branch.name }}</span></td>
+            <td><span class="branch-address">{{ branch.address || '—' }}</span></td>
+            <td>{{ branch.phone || '—' }}</td>
+            <td>
+              @if (warehousesOf(branch.id).length > 0) {
+                <div class="warehouse-tags">
+                  @for (warehouse of warehousesOf(branch.id); track warehouse.id) {
+                    <span class="warehouse-tag"><i class="pi pi-box"></i> {{ warehouse.name }}</span>
+                  }
+                </div>
+              } @else {
+                <span class="branch-address">—</span>
+              }
+            </td>
+            <td>
+              <div class="actions-cell">
+                <button class="action-btn edit" *appHasPermission="'BRANCHES.EDIT'" (click)="onEdit(branch)" title="Editar"><i class="pi pi-pencil"></i></button>
+                <button
+                  class="action-btn delete"
+                  *appHasPermission="'BRANCHES.DEACTIVATE'"
+                  [disabled]="isOnlyActiveBranch(group)"
+                  [title]="isOnlyActiveBranch(group) ? 'No puedes desactivar la única sucursal activa' : 'Desactivar'"
+                  (click)="onDeactivate(branch, group)"
+                >
+                  <i class="pi pi-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="emptymessage">
+          <tr><td colspan="5"><div class="empty-state"><i class="pi pi-map-marker"></i><p>No hay sucursales configuradas</p></div></td></tr>
+        </ng-template>
+      </p-table>
+    </div>
+  </div>
+}

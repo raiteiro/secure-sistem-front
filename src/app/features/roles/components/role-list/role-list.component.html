@@ -5,7 +5,7 @@
     <i class="pi pi-id-card header-icon"></i>
     <div><h2>Roles</h2><span class="subtitle">Gestión de roles y permisos</span></div>
   </div>
-  <button class="btn-primary" (click)="onCreate()"><i class="pi pi-plus"></i> Nuevo rol</button>
+  <button class="btn-primary" *appHasPermission="'ROLES.CREATE'" (click)="onCreate()"><i class="pi pi-plus"></i> Nuevo rol</button>
 </div>
 
 @for (group of roleGroups(); track group.companyId) {
@@ -14,7 +14,7 @@
       <div class="company-group-header">
         <i class="pi pi-building"></i>
         <span class="company-group-name">{{ group.companyName }}</span>
-        <button class="group-add-btn" (click)="onCreate(group.companyId)" title="Nuevo rol en esta empresa">
+        <button class="group-add-btn" *appHasPermission="'ROLES.CREATE'" (click)="onCreate(group.companyId)" title="Nuevo rol en esta empresa">
           <i class="pi pi-plus"></i>
         </button>
       </div>
@@ -50,9 +50,9 @@
             <td><span class="route-count">{{ role.routeIds?.length || 0 }}</span></td>
             <td>
               <div class="actions-cell">
-                <button class="action-btn routes" (click)="onManageRoutes(role)" title="Asignar rutas"><i class="pi pi-sitemap"></i></button>
-                <button class="action-btn edit" (click)="onEdit(role)" title="Editar"><i class="pi pi-pencil"></i></button>
-                <button class="action-btn delete" (click)="onDeactivate(role)" title="Desactivar"><i class="pi pi-trash"></i></button>
+                <button class="action-btn routes" *appHasPermission="'ROLES.ASSIGN_ROUTES'" (click)="onManageAccess(role)" title="Rutas y permisos"><i class="pi pi-sitemap"></i></button>
+                <button class="action-btn edit" *appHasPermission="'ROLES.EDIT'" (click)="onEdit(role)" title="Editar"><i class="pi pi-pencil"></i></button>
+                <button class="action-btn delete" *appHasPermission="'ROLES.DEACTIVATE'" (click)="onDeactivate(role)" title="Desactivar"><i class="pi pi-trash"></i></button>
               </div>
             </td>
           </tr>
@@ -94,12 +94,12 @@
   </div>
 </p-dialog>
 
-<!-- MODAL: Asignar Rutas -->
-<p-dialog [(visible)]="showRoutesModal" [modal]="true" [draggable]="false" [resizable]="false"
+<!-- MODAL: Rutas y permisos (cada acción aparece debajo de la ruta/ventana a la que pertenece) -->
+<p-dialog [(visible)]="showAccessModal" [modal]="true" [draggable]="false" [resizable]="false"
   [style]="{ width: '520px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
   <div class="rm-header">
-    <div class="rm-title"><i class="pi pi-sitemap"></i> Rutas de "{{ routesRoleName }}"</div>
-    <button class="rm-close" (click)="showRoutesModal = false"><i class="pi pi-times"></i></button>
+    <div class="rm-title"><i class="pi pi-sitemap"></i> Rutas y permisos de "{{ accessRoleName }}"</div>
+    <button class="rm-close" (click)="showAccessModal = false"><i class="pi pi-times"></i></button>
   </div>
   <div class="rm-body routes-body">
     @for (route of allRoutes(); track route.id) {
@@ -110,6 +110,15 @@
         <span class="check-label">{{ route.windowName }}</span>
         <code class="check-path">{{ route.routePath }}</code>
       </label>
+      @if (canAssignPermissions()) {
+        @for (action of actionsFor(route.windowId); track action.id) {
+          <label class="route-check lvl-1 action-check">
+            <input type="checkbox" [checked]="isPermissionSelected(action.id)" (change)="togglePermission(action.id)" />
+            <span class="check-box"></span>
+            <span class="check-label">{{ action.name }}</span>
+          </label>
+        }
+      }
       <!-- Level 1 -->
       @for (child of route.children; track child.id) {
         <label class="route-check lvl-1">
@@ -118,6 +127,15 @@
           <span class="check-label">{{ child.windowName }}</span>
           <code class="check-path">{{ child.routePath }}</code>
         </label>
+        @if (canAssignPermissions()) {
+          @for (action of actionsFor(child.windowId); track action.id) {
+            <label class="route-check lvl-2 action-check">
+              <input type="checkbox" [checked]="isPermissionSelected(action.id)" (change)="togglePermission(action.id)" />
+              <span class="check-box"></span>
+              <span class="check-label">{{ action.name }}</span>
+            </label>
+          }
+        }
         <!-- Level 2 -->
         @for (gc of child.children; track gc.id) {
           <label class="route-check lvl-2">
@@ -126,15 +144,26 @@
             <span class="check-label">{{ gc.windowName }}</span>
             <code class="check-path">{{ gc.routePath }}</code>
           </label>
+          @if (canAssignPermissions()) {
+            @for (action of actionsFor(gc.windowId); track action.id) {
+              <label class="route-check lvl-3 action-check">
+                <input type="checkbox" [checked]="isPermissionSelected(action.id)" (change)="togglePermission(action.id)" />
+                <span class="check-box"></span>
+                <span class="check-label">{{ action.name }}</span>
+              </label>
+            }
+          }
         }
       }
     }
   </div>
   <div class="rm-footer">
-    <span class="routes-count">{{ selectedRouteIds().size }} ruta(s) seleccionada(s)</span>
-    <button class="rm-btn-cancel" (click)="showRoutesModal = false">Cancelar</button>
-    <button class="rm-btn-save" (click)="onSaveRoutes()" [disabled]="savingRoutes()">
-      @if (savingRoutes()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+    <span class="routes-count">
+      {{ selectedRouteIds().size }} ruta(s){{ canAssignPermissions() ? ' · ' + selectedPermissionIds().size + ' permiso(s)' : '' }}
+    </span>
+    <button class="rm-btn-cancel" (click)="showAccessModal = false">Cancelar</button>
+    <button class="rm-btn-save" (click)="onSaveAccess()" [disabled]="savingAccess()">
+      @if (savingAccess()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
       Guardar
     </button>
   </div>

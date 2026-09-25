@@ -1,0 +1,116 @@
+<p-confirmDialog />
+
+<div class="page-header">
+  <div class="header-left">
+    <i class="pi pi-users header-icon"></i>
+    <div><h2>Clientes</h2><span class="subtitle">Catálogo de clientes</span></div>
+  </div>
+  <button class="btn-primary" *appHasPermission="'CUSTOMERS.CREATE'" (click)="onCreate()"><i class="pi pi-plus"></i> Nuevo cliente</button>
+</div>
+
+<!-- MODAL: Crear/Editar Cliente -->
+<p-dialog [(visible)]="showModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '460px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi" [class.pi-plus-circle]="!isEdit()" [class.pi-pencil]="isEdit()"></i> {{ isEdit() ? 'Editar Cliente' : 'Nuevo Cliente' }}</div>
+    <button class="rm-close" (click)="showModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    <div class="rm-field-single">
+      <label>Nombre *</label>
+      <input type="text" [(ngModel)]="form.name" placeholder="ej: Juan Pérez" />
+    </div>
+    <div class="rm-row">
+      <div class="rm-field">
+        <label>Email</label>
+        <input type="email" [(ngModel)]="form.email" placeholder="juan@correo.com" />
+      </div>
+      <div class="rm-field">
+        <label>Teléfono</label>
+        <input type="text" [(ngModel)]="form.phone" placeholder="555-1234" />
+      </div>
+    </div>
+    <div class="rm-field-single">
+      <label>RFC / Identificación fiscal</label>
+      <input type="text" [(ngModel)]="form.taxId" placeholder="ej: XAXX010101000" />
+    </div>
+    <div class="rm-field-single">
+      <label>Dirección</label>
+      <input type="text" [(ngModel)]="form.address" placeholder="Calle, número, colonia..." />
+    </div>
+    @if (!isEdit() && authService.isSystemAdmin()) {
+      <div class="rm-field-single">
+        <label>Empresa</label>
+        <select [(ngModel)]="form.companyId">
+          <option [ngValue]="null">Mi empresa (por defecto)</option>
+          @for (company of companies(); track company.id) {
+            <option [ngValue]="company.id">{{ company.name }}</option>
+          }
+        </select>
+      </div>
+    }
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showModal = false">Cancelar</button>
+    <button class="rm-btn-save" (click)="onSave()" [disabled]="saving()">
+      @if (saving()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+      {{ isEdit() ? 'Actualizar' : 'Crear' }}
+    </button>
+  </div>
+</p-dialog>
+
+@for (group of customerGroups(); track group.companyId) {
+  <div class="company-group">
+    @if (authService.isSystemAdmin()) {
+      <div class="company-group-header">
+        <i class="pi pi-building"></i>
+        <span class="company-group-name">{{ group.companyName }}</span>
+        <button class="group-add-btn" *appHasPermission="'CUSTOMERS.CREATE'" (click)="onCreate(group.companyId)" title="Nuevo cliente en esta empresa">
+          <i class="pi pi-plus"></i>
+        </button>
+      </div>
+    }
+
+    <div class="table-card">
+      <div class="table-toolbar">
+        <div class="search-box">
+          <i class="pi pi-search"></i>
+          <input
+            type="text"
+            placeholder="Buscar por nombre, email, teléfono..."
+            (input)="dt.filterGlobal($any($event.target).value, 'contains')"
+          />
+        </div>
+        <span class="customer-count">{{ group.customers.length }} cliente(s)</span>
+      </div>
+
+      <p-table #dt [value]="group.customers" [loading]="loading()" [rowHover]="true"
+        [globalFilterFields]="['name', 'email', 'phone', 'taxId']" styleClass="p-datatable-sm">
+        <ng-template pTemplate="header">
+          <tr>
+            <th pSortableColumn="name">Nombre <p-sortIcon field="name" /></th>
+            <th>Email</th>
+            <th>Teléfono</th>
+            <th style="text-align: center; width: 12%">Acciones</th>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-customer>
+          <tr>
+            <td><span class="customer-name"><i class="pi pi-user"></i> {{ customer.name }}</span></td>
+            <td><span class="customer-email">{{ customer.email || '—' }}</span></td>
+            <td>{{ customer.phone || '—' }}</td>
+            <td>
+              <div class="actions-cell">
+                <button class="action-btn edit" *appHasPermission="'CUSTOMERS.EDIT'" (click)="onEdit(customer)" title="Editar"><i class="pi pi-pencil"></i></button>
+                <button class="action-btn delete" *appHasPermission="'CUSTOMERS.DEACTIVATE'" (click)="onDeactivate(customer)" title="Desactivar"><i class="pi pi-trash"></i></button>
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="emptymessage">
+          <tr><td colspan="4"><div class="empty-state"><i class="pi pi-users"></i><p>No hay clientes registrados</p></div></td></tr>
+        </ng-template>
+      </p-table>
+    </div>
+  </div>
+}

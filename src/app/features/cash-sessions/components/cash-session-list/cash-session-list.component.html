@@ -1,0 +1,182 @@
+<div class="page-header">
+  <div class="header-left">
+    <i class="pi pi-clock header-icon"></i>
+    <div><h2>Turnos de caja</h2><span class="subtitle">Apertura y cierre de caja</span></div>
+  </div>
+</div>
+
+<!-- MODAL: Abrir turno -->
+<p-dialog [(visible)]="showOpenModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '420px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi pi-lock-open"></i> Abrir turno</div>
+    <button class="rm-close" (click)="showOpenModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    <div class="rm-field-single">
+      <label>Caja *</label>
+      <select [(ngModel)]="openForm.cashRegisterId">
+        <option [ngValue]="null">Selecciona una caja</option>
+        @for (cashRegister of availableCashRegisters(); track cashRegister.id) {
+          <option [ngValue]="cashRegister.id">
+            {{ cashRegister.name }} — {{ cashRegister.branchName }}
+            @if (authService.isSystemAdmin()) { ({{ companyName(cashRegister.companyId) }}) }
+          </option>
+        }
+      </select>
+    </div>
+    <div class="rm-field-single">
+      <label>Monto de apertura *</label>
+      <input type="number" [(ngModel)]="openForm.openingAmount" min="0" step="any" placeholder="ej: 500" />
+    </div>
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showOpenModal = false">Cancelar</button>
+    <button class="rm-btn-save" (click)="onSaveOpen()" [disabled]="savingOpen()">
+      @if (savingOpen()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+      Abrir
+    </button>
+  </div>
+</p-dialog>
+
+<!-- MODAL: Cerrar turno -->
+<p-dialog [(visible)]="showCloseModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '420px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi pi-lock"></i> Cerrar turno</div>
+    <button class="rm-close" (click)="showCloseModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    @if (currentSession(); as session) {
+      <p class="modal-item-label">{{ session.cashRegisterName }}</p>
+      <p class="modal-item-sublabel">Monto de apertura: {{ session.openingAmount | number: '1.2-2' }}</p>
+    }
+    <div class="rm-field-single">
+      <label>Monto de cierre *</label>
+      <input type="number" [(ngModel)]="closeForm.closingAmount" min="0" step="any" placeholder="ej: 520" />
+    </div>
+    <div class="rm-field-single">
+      <label>Notas</label>
+      <textarea [(ngModel)]="closeForm.notes" rows="2" placeholder="Observaciones del corte..."></textarea>
+    </div>
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showCloseModal = false">Cancelar</button>
+    <button class="rm-btn-save" (click)="onSaveClose()" [disabled]="savingClose()">
+      @if (savingClose()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+      Cerrar turno
+    </button>
+  </div>
+</p-dialog>
+
+<!-- Estado actual -->
+<div class="current-card">
+  @if (currentLoading()) {
+    <div class="current-loading"><i class="pi pi-spinner pi-spin"></i> Verificando turno actual...</div>
+  } @else {
+    @if (currentSession(); as session) {
+      <div class="current-open">
+        <div class="current-icon open"><i class="pi pi-lock-open"></i></div>
+        <div class="current-info">
+          <span class="current-status">Turno abierto</span>
+          <span class="current-detail">{{ session.cashRegisterName }} — apertura {{ session.openingAmount | number: '1.2-2' }} el {{ session.openedAt | date: 'short' }}</span>
+        </div>
+        <button class="btn-primary" *appHasPermission="'CASH_SESSIONS.CLOSE'" (click)="onCloseSession()"><i class="pi pi-lock"></i> Cerrar turno</button>
+      </div>
+    } @else {
+      <div class="current-closed">
+        <div class="current-icon closed"><i class="pi pi-lock"></i></div>
+        <div class="current-info">
+          <span class="current-status">Sin turno abierto</span>
+          <span class="current-detail">Abre una caja para empezar a operar</span>
+        </div>
+        <button class="btn-primary" *appHasPermission="'CASH_SESSIONS.OPEN'" (click)="onOpenSession()"><i class="pi pi-lock-open"></i> Abrir caja</button>
+      </div>
+    }
+  }
+</div>
+
+<!-- Historial -->
+<div class="filters-bar">
+  <input type="date" class="filter-date" [(ngModel)]="filterFrom" (ngModelChange)="onFilterChange()" title="Desde" />
+  <input type="date" class="filter-date" [(ngModel)]="filterTo" (ngModelChange)="onFilterChange()" title="Hasta" />
+  <select class="filter-select" [(ngModel)]="filterCashRegisterId" (ngModelChange)="onFilterChange()">
+    <option [ngValue]="null">Todas las cajas</option>
+    @for (cashRegister of cashRegisters(); track cashRegister.id) {
+      <option [ngValue]="cashRegister.id">{{ cashRegister.name }}</option>
+    }
+  </select>
+  <select class="filter-select" [(ngModel)]="filterStatus" (ngModelChange)="onFilterChange()">
+    <option value="all">Todos los estados</option>
+    <option value="open">Abiertos</option>
+    <option value="closed">Cerrados</option>
+  </select>
+</div>
+
+@if (historyLoading()) {
+  <div class="table-card"><div class="empty-state"><i class="pi pi-spinner pi-spin"></i><p>Cargando historial...</p></div></div>
+} @else if (history().length === 0) {
+  <div class="table-card"><div class="empty-state"><i class="pi pi-clock"></i><p>No hay turnos registrados</p></div></div>
+} @else {
+  @for (group of historyGroups(); track group.companyId) {
+    <div class="company-group">
+      @if (authService.isSystemAdmin()) {
+        <div class="company-group-header">
+          <i class="pi pi-building"></i>
+          <span class="company-group-name">{{ group.companyName }}</span>
+        </div>
+      }
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <span class="session-count">{{ group.sessions.length }} turno(s)</span>
+        </div>
+        <div class="table-scroll">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Caja</th>
+                <th>Estado</th>
+                <th style="text-align: right">Apertura</th>
+                <th style="text-align: right">Cierre</th>
+                <th style="text-align: right">Esperado</th>
+                <th style="text-align: right">Diferencia</th>
+                <th>Abierto</th>
+                <th>Cerrado</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (session of group.sessions; track session.id) {
+                <tr>
+                  <td class="cash-register-cell">{{ session.cashRegisterName }}</td>
+                  <td>
+                    @if (session.isOpen) {
+                      <span class="open-session-badge">Abierto</span>
+                    } @else {
+                      <span class="closed-badge">Cerrado</span>
+                    }
+                  </td>
+                  <td style="text-align: right">{{ session.openingAmount | number: '1.2-2' }}</td>
+                  <td style="text-align: right">{{ session.closingAmount === null ? '—' : (session.closingAmount | number: '1.2-2') }}</td>
+                  <td style="text-align: right">{{ session.expectedAmount === null ? '—' : (session.expectedAmount | number: '1.2-2') }}</td>
+                  <td
+                    style="text-align: right"
+                    [class.positive]="(session.difference ?? 0) > 0"
+                    [class.negative]="(session.difference ?? 0) < 0"
+                  >
+                    {{ session.difference === null ? '—' : (session.difference | number: '1.2-2') }}
+                  </td>
+                  <td>{{ session.openedAt | date: 'short' }}</td>
+                  <td>{{ session.closedAt ? (session.closedAt | date: 'short') : '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  }
+  <div class="table-card">
+    <app-pager [page]="page()" [totalPages]="totalPages()" [totalCount]="totalCount()" [pageSize]="pageSize" (pageChange)="onPageChange($event)" />
+  </div>
+}

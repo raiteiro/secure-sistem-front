@@ -6,7 +6,7 @@
     <div><h2>Empresas</h2><span class="subtitle">Gestión de empresas y planes de renta</span></div>
   </div>
   @if (authService.isSystemAdmin()) {
-    <button class="btn-primary" (click)="onCreate()"><i class="pi pi-plus"></i> Nueva empresa</button>
+    <button class="btn-primary" *appHasPermission="'COMPANIES.CREATE'" (click)="onCreate()"><i class="pi pi-plus"></i> Nueva empresa</button>
   }
 </div>
 
@@ -56,9 +56,9 @@
         </td>
         <td>
           <div class="actions-cell">
-            <button class="action-btn edit" (click)="onEdit(company)" title="Editar"><i class="pi pi-pencil"></i></button>
+            <button class="action-btn edit" *appHasPermission="'COMPANIES.EDIT'" (click)="onEdit(company)" title="Editar"><i class="pi pi-pencil"></i></button>
             @if (company.isActive) {
-              <button class="action-btn delete" (click)="onDeactivate(company)" title="Desactivar"><i class="pi pi-trash"></i></button>
+              <button class="action-btn delete" *appHasPermission="'COMPANIES.DEACTIVATE'" (click)="onDeactivate(company)" title="Desactivar"><i class="pi pi-trash"></i></button>
             }
           </div>
         </td>
@@ -151,7 +151,7 @@
           } @else {
             <div class="logo-preview logo-preview-empty"><i class="pi pi-image"></i></div>
           }
-          <label class="logo-upload-btn" [class.disabled]="uploadingLogo()">
+          <label class="logo-upload-btn" *appHasPermission="'COMPANIES.UPLOAD_LOGO'" [class.disabled]="uploadingLogo()">
             @if (uploadingLogo()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-upload"></i> }
             {{ uploadingLogo() ? 'Subiendo...' : (logoUrl() ? 'Cambiar logo' : 'Subir logo') }}
             <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" [disabled]="uploadingLogo()" (change)="onLogoFileSelected($event)" hidden />

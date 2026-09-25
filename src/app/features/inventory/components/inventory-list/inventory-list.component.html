@@ -1,0 +1,120 @@
+<div class="page-header">
+  <div class="header-left">
+    <i class="pi pi-box header-icon"></i>
+    <div><h2>Inventario</h2><span class="subtitle">Stock actual por almacén</span></div>
+  </div>
+  <button class="filter-toggle" [class.active]="lowStockOnly()" (click)="toggleLowStockOnly()">
+    <i class="pi pi-exclamation-triangle"></i> Solo bajo stock
+  </button>
+</div>
+
+<!-- MODAL: Historial de movimientos -->
+<p-dialog [(visible)]="showHistoryModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '640px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi pi-history"></i> Historial de movimientos</div>
+    <button class="rm-close" (click)="showHistoryModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    @if (historyItem) {
+      <p class="modal-item-label">{{ historyItem.productName }} — {{ historyItem.warehouseName }}</p>
+    }
+    @if (historyLoading()) {
+      <div class="history-empty"><i class="pi pi-spinner pi-spin"></i> Cargando...</div>
+    } @else if (historyMovements().length === 0) {
+      <div class="history-empty"><i class="pi pi-history"></i><p>Sin movimientos registrados</p></div>
+    } @else {
+      <table class="history-table">
+        <thead>
+          <tr><th>Fecha</th><th>Tipo</th><th>Cantidad</th><th>Resultante</th><th>Notas</th></tr>
+        </thead>
+        <tbody>
+          @for (movement of historyMovements(); track movement.id) {
+            <tr>
+              <td>{{ movement.createdAt | date: 'short' }}</td>
+              <td>
+                <span class="movement-type" [class]="'type-' + movement.type.toLowerCase()">
+                  {{ movementTypeLabels[movement.type] }}
+                </span>
+              </td>
+              <td [class.positive]="movement.quantity > 0" [class.negative]="movement.quantity < 0">
+                {{ movement.quantity > 0 ? '+' : '' }}{{ movement.quantity | number: '1.0-4' }}
+              </td>
+              <td>{{ movement.resultingQuantity | number: '1.0-4' }}</td>
+              <td class="notes-cell">{{ movement.notes || '—' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      <app-pager [page]="historyPage()" [totalPages]="historyTotalPages()" [totalCount]="historyTotalCount()" [pageSize]="historyPageSize" (pageChange)="onHistoryPageChange($event)" />
+    }
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showHistoryModal = false">Cerrar</button>
+  </div>
+</p-dialog>
+
+@for (group of inventoryGroups(); track group.companyId) {
+  <div class="company-group">
+    @if (authService.isSystemAdmin()) {
+      <div class="company-group-header">
+        <i class="pi pi-building"></i>
+        <span class="company-group-name">{{ group.companyName }}</span>
+      </div>
+    }
+
+    <div class="table-card">
+      <div class="table-toolbar">
+        <div class="search-box">
+          <i class="pi pi-search"></i>
+          <input
+            type="text"
+            placeholder="Buscar por producto, SKU, almacén..."
+            (input)="dt.filterGlobal($any($event.target).value, 'contains')"
+          />
+        </div>
+        <span class="item-count">{{ group.items.length }} artículo(s)</span>
+      </div>
+
+      <p-table #dt [value]="group.items" [loading]="loading()" [rowHover]="true"
+        [globalFilterFields]="['productName', 'productSku', 'warehouseName']" styleClass="p-datatable-sm">
+        <ng-template pTemplate="header">
+          <tr>
+            <th pSortableColumn="productName">Producto <p-sortIcon field="productName" /></th>
+            <th>Almacén</th>
+            <th style="text-align: right">Cantidad</th>
+            <th style="text-align: right">Mínimo</th>
+            <th>Estado</th>
+            <th style="text-align: center; width: 14%">Acciones</th>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-item>
+          <tr>
+            <td>
+              <span class="product-name">{{ item.productName }}</span>
+              <span class="product-sku">{{ item.productSku }}</span>
+            </td>
+            <td>{{ item.warehouseName }}</td>
+            <td style="text-align: right">{{ item.quantity | number: '1.0-4' }}</td>
+            <td style="text-align: right">{{ item.minStock === null ? '—' : (item.minStock | number: '1.0-4') }}</td>
+            <td>
+              @if (item.isLowStock) {
+                <span class="low-stock-badge">Bajo stock</span>
+              } @else {
+                <span class="ok-badge">OK</span>
+              }
+            </td>
+            <td>
+              <div class="actions-cell">
+                <button class="action-btn history" (click)="onViewHistory(item)" title="Ver historial"><i class="pi pi-history"></i></button>
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="emptymessage">
+          <tr><td colspan="6"><div class="empty-state"><i class="pi pi-box"></i><p>No hay artículos en inventario</p></div></td></tr>
+        </ng-template>
+      </p-table>
+    </div>
+  </div>
+}

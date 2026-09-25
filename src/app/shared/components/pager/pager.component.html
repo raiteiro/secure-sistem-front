@@ -1,0 +1,14 @@
+<div class="pager" [class.hidden]="totalCount === 0">
+  <span class="pager-range">
+    {{ rangeStart }}–{{ rangeEnd }} de {{ totalCount }}
+  </span>
+  <div class="pager-buttons">
+    <button class="pager-btn" (click)="onPrev()" [disabled]="page <= 1" title="Anterior">
+      <i class="pi pi-chevron-left"></i>
+    </button>
+    <span class="pager-page">Página {{ page }} de {{ totalPages }}</span>
+    <button class="pager-btn" (click)="onNext()" [disabled]="page >= totalPages" title="Siguiente">
+      <i class="pi pi-chevron-right"></i>
+    </button>
+  </div>
+</div>

@@ -8,7 +8,7 @@
       <span class="subtitle">Estructura del menú del sistema</span>
     </div>
   </div>
-  <button class="btn-primary" (click)="onCreate()"><i class="pi pi-plus"></i> Nueva ruta</button>
+  <button class="btn-primary" *appHasPermission="'NAV_ROUTES.CREATE'" (click)="onCreate()"><i class="pi pi-plus"></i> Nueva ruta</button>
 </div>
 
 @if (loading()) {
@@ -27,7 +27,7 @@
           <i class="pi pi-building"></i>
           <span class="company-group-name">{{ group.companyName }}</span>
           <span class="company-group-count">{{ group.nodes.length }} raíz(es)</span>
-          <button class="group-add-btn" (click)="onCreate(group.companyId)" title="Nueva ruta en esta empresa">
+          <button class="group-add-btn" *appHasPermission="'NAV_ROUTES.CREATE'" (click)="onCreate(group.companyId)" title="Nueva ruta en esta empresa">
             <i class="pi pi-plus"></i>
           </button>
         </div>
@@ -77,8 +77,8 @@
               <td><span class="status-badge" [class.active]="rowData.isActive" [class.inactive]="!rowData.isActive">{{ rowData.isActive ? 'Activo' : 'Inactivo' }}</span></td>
               <td>
                 <div class="actions-cell">
-                  <button class="action-btn edit" (click)="onEdit(rowData)"><i class="pi pi-pencil"></i></button>
-                  <button class="action-btn delete" (click)="onDeactivate(rowData)"><i class="pi pi-trash"></i></button>
+                  <button class="action-btn edit" *appHasPermission="'NAV_ROUTES.EDIT'" (click)="onEdit(rowData)"><i class="pi pi-pencil"></i></button>
+                  <button class="action-btn delete" *appHasPermission="'NAV_ROUTES.DEACTIVATE'" (click)="onDeactivate(rowData)"><i class="pi pi-trash"></i></button>
                 </div>
               </td>
             </tr>

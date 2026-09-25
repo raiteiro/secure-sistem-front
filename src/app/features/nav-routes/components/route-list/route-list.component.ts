@@ -6,6 +6,7 @@ import { ButtonModule } from 'primeng/button';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { DialogModule } from 'primeng/dialog';
 import { ConfirmationService, TreeNode } from 'primeng/api';
+import { HasPermissionDirective } from '../../../../shared/directives/has-permission.directive';
 import { NavRoutesService } from '../../services/nav-routes.service';
 import { CompaniesService } from '../../../companies/services/companies.service';
 import { AuthService } from '../../../../core/services/auth.service';
@@ -24,7 +25,7 @@ interface IRouteGroup {
 @Component({
   selector: 'app-route-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, TreeTableModule, ButtonModule, ConfirmDialogModule, DialogModule],
+  imports: [CommonModule, FormsModule, TreeTableModule, ButtonModule, ConfirmDialogModule, DialogModule, HasPermissionDirective],
   providers: [ConfirmationService],
   templateUrl: './route-list.component.html',
   styleUrl: './route-list.component.scss'

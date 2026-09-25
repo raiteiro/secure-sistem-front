@@ -45,9 +45,11 @@ Deben ser:
   - `rm-btn-cancel`, `rm-btn-save`
   - Usar `p-dialog` con `[showHeader]="false"` y `styleClass="route-modal"`
 - Custom toast styles: clases `custom-toast` en `styles.scss` global (gradiente por severidad + icono con fondo sólido)
+- `HasPermissionDirective` (`shared/directives/has-permission.directive.ts`): directiva estructural `*appHasPermission="'MODULO.ACCION'"` que oculta el elemento si el usuario logueado no tiene ese permiso (ver [Permisos por acción (botones)](#permisos-por-acción-botones) más abajo)
+- `PagerComponent` (`shared/components/pager/`): controles de paginación (`<app-pager [page] [totalPages] [totalCount] [pageSize] (pageChange)>`) para listas que consumen un `IPagedResult<T>` (`core/models/pagination.models.ts`) — ver [PAGINATION.md](PAGINATION.md) para qué endpoints ya están migrados a este contrato
 
 **Componentes base esperados (pendientes/objetivo):**
-- Tabla genérica con paginación, ordenamiento y filtros
+- Tabla genérica con paginación, ordenamiento y filtros (la paginación en sí ya existe como `PagerComponent`, ver arriba — falta la tabla genérica que la envuelva)
 - Formulario dinámico basado en configuración JSON
 - Diálogos de confirmación reutilizables
 - Componentes de notificación/toast
@@ -61,6 +63,7 @@ Singleton, funcionalidad transversal:
 - `HttpErrorInterceptor`: manejo centralizado de errores HTTP
 - `TokenInterceptor`: adjuntar JWT a peticiones
 - `NotificationService`: mostrar mensajes al usuario
+- `PermissionsService` (`core/services/permissions.service.ts`): resuelve `has(permissionId)` para gatear botones por acción (ver [Permisos por acción (botones)](#permisos-por-acción-botones))
 - `StorageService`: abstracción sobre localStorage/sessionStorage
 - `ThemeService`: manejo de temas claro/oscuro
 - `ConfigService`: configuración dinámica de la aplicación
@@ -270,6 +273,61 @@ Colores semánticos:
 - Confirmar antes de desactivar con `ConfirmDialog` de PrimeNG
 - Loading states con signals: `loading()`, `saving()`
 - Todos los componentes son standalone
+
+## Permisos por acción (botones)
+
+Ya implementado en backend y frontend: permisos granulares por acción, además del permiso por
+ventana completa que ya existía vía `NavigationRoute`. El catálogo completo de ids, con su ruta y
+componente, vive en [PERMISSIONS.md](PERMISSIONS.md) — consultarlo antes de asignar un id nuevo,
+para no duplicar convención ni número.
+
+**Backend**: `GET /api/Permissions` (catálogo, `{ id, key, name, description, windowId, isActive,
+isDefaultForNewRoles }` — `name` ya en español, `windowId` es el mismo valor que
+`NavigationRoute.windowId`), `GET /api/Permissions/my-permissions` (los `key` del usuario
+logueado), `GET`/`POST /api/Roles/{id}/permissions` (ver/asignar por rol, mismo patrón que
+`/routes`). **Frontend**: `PermissionsService` (`core/services/permissions.service.ts`) pide
+`my-permissions` una vez por sesión y expone `has(id)`; la asignación vive en el modal "Rutas y
+permisos" de Roles (`RoleListComponent.onManageAccess`), junto con la asignación de ventanas — cada
+acción se muestra anidada debajo de su ruta (emparejadas por `windowId`, nunca por `windowName`,
+que es texto libre), no en una pantalla separada.
+
+**Regla obligatoria a partir de ahora: todo botón que dispare una acción de negocio real (crear,
+editar, desactivar, exportar, abrir/cerrar turno, enviar correo, etc. — ver "Qué cuenta como
+acción" en PERMISSIONS.md) debe tener:**
+1. Un id de permiso en formato `MODULO.ACCION` (mayúsculas, `_` como separador dentro de cada
+   parte) — el módulo es estable por ventana, no cambia aunque cambie el texto del botón.
+2. La directiva `*appHasPermission="'MODULO.ACCION'"` (`shared/directives/has-permission.directive.ts`)
+   en el botón, para que se oculte si el usuario logueado no tiene ese permiso.
+
+No hace falta gatear con la directiva: cerrar un modal, "Cancelar" de un formulario, cambiar de
+tab, paginación, ni botones de solo lectura (ver detalle/historial) — el acceso a la ventana en sí
+ya cubre esos casos.
+
+**Cuando se cree un componente o ventana nueva con botones de acción**:
+1. Agregar la fila correspondiente a la tabla de [PERMISSIONS.md](PERMISSIONS.md) (id, ventana,
+   ruta, componente, acción, disparador), con la acción en español tal como debe verse en pantalla
+   (ej. "Crear usuario") — el backend usa ese texto como `IPermission.name` al dar de alta el
+   permiso, así que no hace falta traducirlo ni duplicarlo en el frontend.
+2. Avisar para pasarle esos ids nuevos al backend, junto con el `windowId` de la ventana a la que
+   pertenecen (`NavigationRoute.windowId`, ej. `"win-users"`) — ahí se generan los permisos
+   correspondientes, ya con `name` en español y `windowId` vinculado, y se agregan a la base de
+   datos. `RoleListComponent` empareja acción↔ruta por `windowId`, nunca por `windowName` (texto
+   libre, no hay garantía de que calce).
+
+Un botón con `*appHasPermission` apuntando a un id que el backend todavía no conoce simplemente se
+comporta como si nadie (salvo admin de sistema) lo tuviera — no rompe nada, pero tampoco sirve
+hasta que el backend lo dé de alta.
+
+`isSystemAdmin` sigue mandando por encima de todo: un admin de sistema siempre ve todos los
+botones, tenga o no el id en lo que devuelva `my-permissions`. Mientras esa llamada no ha resuelto
+(justo después del login) `has()` no oculta nada, para evitar parpadeo — el enforcement real vive
+en el backend en cada endpoint, esto es solo para no mostrar botones que fallarían con 403.
+
+**Crear y Editar comparten modal y botón "Guardar" en casi todas las pantallas** (`onSave()`
+decide si crea o actualiza según `isEdit()`). Son igual dos permisos distintos: se gatea el botón
+de *entrada* por separado — el `+` "Nueva X"/`group-add-btn` con `CREATE`, el ícono de lápiz con
+`EDIT` — y "Guardar" ejecuta lo que corresponda según por dónde entró. No hace falta gatear
+"Guardar" aparte.
 
 ## Prácticas de Seguridad
 

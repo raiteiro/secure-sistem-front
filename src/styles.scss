@@ -353,6 +353,7 @@ html, body {
 .route-check.lvl-0 { padding-left: 0.75rem; }
 .route-check.lvl-1 { padding-left: 2rem; }
 .route-check.lvl-2 { padding-left: 3.25rem; }
+.route-check.lvl-3 { padding-left: 4.5rem; }
 
 .route-check input[type="checkbox"] { display: none; }
 
@@ -384,6 +385,13 @@ html, body {
 
 .routes-count {
   font-size: 0.8125rem; color: #6b7280; font-weight: 500; margin-right: auto;
+}
+
+/* ===== Permisos de acción anidados bajo su ruta, dentro del mismo modal de rutas ===== */
+.route-check.action-check {
+  .check-box { width: 16px; height: 16px; border-radius: 4px; }
+  .check-label { font-weight: 500; font-size: 0.8125rem; color: #4a4a5a; }
+  input:checked + .check-box { background: #8b5cf6; border-color: #8b5cf6; }
 }
 
 /* ===== Confirm Dialog Global Styles ===== */
@@ -605,4 +613,16 @@ html, body {
 }
 .custom-toast .p-toast-message-info .p-toast-icon-close {
   color: #1e40af !important;
+}
+
+/* ===== Impresión de tickets/recibos =====
+   `.receipt-print-area` puede vivir dentro de un p-dialog (portal fuera del árbol del componente),
+   así que el aislamiento se hace por visibilidad global, no por scoping de componente. */
+@media print {
+  body * { visibility: hidden; }
+  .receipt-print-area, .receipt-print-area * { visibility: visible; }
+  .receipt-print-area {
+    position: absolute; top: 0; left: 0; width: 100%; margin: 0; padding: 0;
+  }
+  .p-dialog-mask { background: transparent !important; }
 }

@@ -1,0 +1,102 @@
+<p-confirmDialog />
+
+<div class="page-header">
+  <div class="header-left">
+    <i class="pi pi-percentage header-icon"></i>
+    <div><h2>Impuestos</h2><span class="subtitle">Catálogo de tasas de impuesto</span></div>
+  </div>
+  <button class="btn-primary" *appHasPermission="'TAX_RATES.CREATE'" (click)="onCreate()"><i class="pi pi-plus"></i> Nuevo impuesto</button>
+</div>
+
+<!-- MODAL: Crear/Editar Impuesto -->
+<p-dialog [(visible)]="showModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '420px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi" [class.pi-plus-circle]="!isEdit()" [class.pi-pencil]="isEdit()"></i> {{ isEdit() ? 'Editar Impuesto' : 'Nuevo Impuesto' }}</div>
+    <button class="rm-close" (click)="showModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    <div class="rm-field-single">
+      <label>Nombre *</label>
+      <input type="text" [(ngModel)]="form.name" placeholder="ej: IVA 16%" />
+    </div>
+    <div class="rm-field-single">
+      <label>Tasa (%) *</label>
+      <input type="number" [(ngModel)]="form.ratePercent" min="0" max="100" step="any" placeholder="ej: 16" />
+    </div>
+    @if (!isEdit() && authService.isSystemAdmin()) {
+      <div class="rm-field-single">
+        <label>Empresa</label>
+        <select [(ngModel)]="form.companyId">
+          <option [ngValue]="null">Mi empresa (por defecto)</option>
+          @for (company of companies(); track company.id) {
+            <option [ngValue]="company.id">{{ company.name }}</option>
+          }
+        </select>
+      </div>
+    }
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showModal = false">Cancelar</button>
+    <button class="rm-btn-save" (click)="onSave()" [disabled]="saving()">
+      @if (saving()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+      {{ isEdit() ? 'Actualizar' : 'Crear' }}
+    </button>
+  </div>
+</p-dialog>
+
+@for (group of taxRateGroups(); track group.companyId) {
+  <div class="company-group">
+    @if (authService.isSystemAdmin()) {
+      <div class="company-group-header">
+        <i class="pi pi-building"></i>
+        <span class="company-group-name">{{ group.companyName }}</span>
+        <button class="group-add-btn" *appHasPermission="'TAX_RATES.CREATE'" (click)="onCreate(group.companyId)" title="Nuevo impuesto en esta empresa">
+          <i class="pi pi-plus"></i>
+        </button>
+      </div>
+    }
+
+    <div class="table-card">
+      <div class="table-toolbar">
+        <div class="search-box">
+          <i class="pi pi-search"></i>
+          <input
+            type="text"
+            placeholder="Buscar por nombre..."
+            (input)="dt.filterGlobal($any($event.target).value, 'contains')"
+          />
+        </div>
+        <span class="tax-count">{{ group.taxRates.length }} impuesto(s)</span>
+      </div>
+
+      <p-table #dt [value]="group.taxRates" [loading]="loading()" [rowHover]="true"
+        [globalFilterFields]="['name']" styleClass="p-datatable-sm">
+        <ng-template pTemplate="header">
+          <tr>
+            <th pSortableColumn="name">Nombre <p-sortIcon field="name" /></th>
+            <th style="text-align: right">Tasa</th>
+            <th style="text-align: center; width: 12%">Acciones</th>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-taxRate>
+          <tr>
+            <td><span class="tax-name"><i class="pi pi-percentage"></i> {{ taxRate.name }}</span></td>
+            <td style="text-align: right">
+              <span class="rate-badge">{{ taxRate.rate * 100 | number: '1.0-2' }}%</span>
+            </td>
+            <td>
+              <div class="actions-cell">
+                <button class="action-btn edit" *appHasPermission="'TAX_RATES.EDIT'" (click)="onEdit(taxRate)" title="Editar"><i class="pi pi-pencil"></i></button>
+                <button class="action-btn delete" *appHasPermission="'TAX_RATES.DEACTIVATE'" (click)="onDeactivate(taxRate)" title="Desactivar"><i class="pi pi-trash"></i></button>
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="emptymessage">
+          <tr><td colspan="3"><div class="empty-state"><i class="pi pi-percentage"></i><p>No hay impuestos configurados</p></div></td></tr>
+        </ng-template>
+      </p-table>
+    </div>
+  </div>
+}

@@ -1,0 +1,243 @@
+<div class="page-header">
+  <div class="header-left">
+    <i class="pi pi-wallet header-icon"></i>
+    <div><h2>Consignaciones</h2><span class="subtitle">Saldos y liquidaciones a proveedores consignadores</span></div>
+  </div>
+</div>
+
+<div class="tabs-bar">
+  <button class="tab-btn" [class.active]="activeTab() === 'balances'" (click)="onSelectTab('balances')">
+    <i class="pi pi-wallet"></i> Saldos pendientes
+  </button>
+  <button class="tab-btn" [class.active]="activeTab() === 'settlements'" (click)="onSelectTab('settlements')">
+    <i class="pi pi-history"></i> Historial de liquidaciones
+  </button>
+  <button class="tab-btn" [class.active]="activeTab() === 'stock'" (click)="onSelectTab('stock')">
+    <i class="pi pi-box"></i> Productos por consignador
+  </button>
+</div>
+
+<!-- MODAL: Detalle de ventas -->
+<p-dialog [(visible)]="showDetailModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '620px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title">
+      <i class="pi pi-list"></i>
+      @if (detailSettlement(); as st) {
+        Liquidación de "{{ st.supplierName }}" — {{ st.createdAt | date: 'short' }}
+      } @else {
+        Ventas pendientes de "{{ detailSupplierName }}"
+      }
+    </div>
+    <button class="rm-close" (click)="showDetailModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    @if (detailLoading()) {
+      <div class="empty-state small"><i class="pi pi-spinner pi-spin"></i><p>Cargando...</p></div>
+    } @else if (detailSales().length === 0) {
+      <div class="empty-state small"><i class="pi pi-inbox"></i><p>Sin ventas para mostrar</p></div>
+    } @else {
+      <table class="detail-sales-table">
+        <thead>
+          <tr>
+            <th>Folio</th>
+            <th>Producto</th>
+            <th style="text-align: right">Cant.</th>
+            <th style="text-align: right">Venta</th>
+            <th style="text-align: right">A pagar</th>
+            <th>Fecha</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (sale of detailSales(); track sale.id) {
+            <tr>
+              <td class="folio-cell">#{{ sale.saleFolioNumber }}</td>
+              <td>
+                <span class="cart-product-name">{{ sale.productName }}</span>
+                <span class="cart-product-sku">{{ sale.productSku || '—' }}</span>
+              </td>
+              <td style="text-align: right">{{ sale.quantity | number: '1.0-4' }}</td>
+              <td style="text-align: right">{{ sale.saleAmount | number: '1.2-2' }}</td>
+              <td style="text-align: right" class="payable-cell">{{ sale.payableAmount | number: '1.2-2' }}</td>
+              <td>{{ sale.createdAt | date: 'short' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      @if (!detailSettlement()) {
+        <app-pager [page]="detailPage()" [totalPages]="detailTotalPages()" [totalCount]="detailTotalCount()" [pageSize]="detailPageSize" (pageChange)="onDetailPageChange($event)" />
+      }
+    }
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showDetailModal = false">Cerrar</button>
+  </div>
+</p-dialog>
+
+<!-- MODAL: Liquidar -->
+<p-dialog [(visible)]="showSettleModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '420px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi pi-check-circle"></i> Liquidar a "{{ settlingSupplierName }}"</div>
+    <button class="rm-close" (click)="showSettleModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    <p class="modal-item-label">Monto a liquidar: {{ settlingPendingAmount | number: '1.2-2' }}</p>
+    <p class="modal-item-sublabel">Esto marca como liquidado todo lo pendiente de este proveedor hasta ahora.</p>
+    <div class="rm-field-single">
+      <label>Notas</label>
+      <textarea [(ngModel)]="settleNotes" rows="2" placeholder="ej: Pago semanal"></textarea>
+    </div>
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showSettleModal = false">Cancelar</button>
+    <button class="rm-btn-save" (click)="onConfirmSettle()" [disabled]="settling()">
+      @if (settling()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+      Liquidar
+    </button>
+  </div>
+</p-dialog>
+
+<!-- ===== Saldos pendientes ===== -->
+@if (activeTab() === 'balances') {
+  @if (balancesLoading()) {
+    <div class="table-card"><div class="empty-state"><i class="pi pi-spinner pi-spin"></i><p>Cargando saldos...</p></div></div>
+  } @else if (balances().length === 0) {
+    <div class="table-card"><div class="empty-state"><i class="pi pi-wallet"></i><p>No hay saldos pendientes con proveedores consignadores</p></div></div>
+  } @else {
+    <div class="table-card">
+      <div class="table-toolbar">
+        <span class="result-count">{{ balances().length }} proveedor(es) con saldo</span>
+      </div>
+      <div class="table-scroll">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Proveedor</th>
+              <th style="text-align: right">Ventas pendientes</th>
+              <th style="text-align: right">Monto pendiente</th>
+              <th style="text-align: center; width: 120px">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (balance of balances(); track balance.supplierId) {
+              <tr>
+                <td class="folio-cell">{{ balance.supplierName }}</td>
+                <td style="text-align: right">{{ balance.pendingSalesCount | number: '1.0-0' }}</td>
+                <td style="text-align: right" class="payable-cell">{{ balance.pendingAmount | number: '1.2-2' }}</td>
+                <td>
+                  <div class="actions-cell">
+                    <button class="action-btn history" (click)="onViewPendingSales(balance)" title="Ver ventas pendientes"><i class="pi pi-eye"></i></button>
+                    <button class="action-btn settle" *appHasPermission="'CONSIGNMENT.SETTLE'" (click)="onOpenSettle(balance)" title="Liquidar"><i class="pi pi-check-circle"></i></button>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+}
+
+<!-- ===== Historial de liquidaciones ===== -->
+@if (activeTab() === 'settlements') {
+  <div class="filters-bar">
+    <input type="date" class="filter-date" [(ngModel)]="settlementsFilterFrom" (ngModelChange)="onSettlementsFilterChange()" title="Desde" />
+    <input type="date" class="filter-date" [(ngModel)]="settlementsFilterTo" (ngModelChange)="onSettlementsFilterChange()" title="Hasta" />
+  </div>
+  @if (settlementsLoading()) {
+    <div class="table-card"><div class="empty-state"><i class="pi pi-spinner pi-spin"></i><p>Cargando historial...</p></div></div>
+  } @else if (settlements().length === 0) {
+    <div class="table-card"><div class="empty-state"><i class="pi pi-history"></i><p>Sin liquidaciones registradas</p></div></div>
+  } @else {
+    <div class="table-card">
+      <div class="table-toolbar">
+        <span class="result-count">{{ settlements().length }} liquidación(es)</span>
+      </div>
+      <div class="table-scroll">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Proveedor</th>
+              <th style="text-align: right">Ventas</th>
+              <th style="text-align: right">Monto</th>
+              <th>Notas</th>
+              <th>Fecha</th>
+              <th>Usuario</th>
+              <th style="text-align: center; width: 60px"></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (settlement of settlements(); track settlement.id) {
+              <tr>
+                <td class="folio-cell">{{ settlement.supplierName }}</td>
+                <td style="text-align: right">{{ settlement.salesCount | number: '1.0-0' }}</td>
+                <td style="text-align: right" class="payable-cell">{{ settlement.totalAmount | number: '1.2-2' }}</td>
+                <td class="notes-cell">{{ settlement.notes || '—' }}</td>
+                <td>{{ settlement.createdAt | date: 'short' }}</td>
+                <td>{{ settlement.createdBy }}</td>
+                <td style="text-align: center">
+                  <button class="action-btn history" (click)="onViewSettlementDetail(settlement)" title="Ver detalle"><i class="pi pi-eye"></i></button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <app-pager [page]="settlementsPage()" [totalPages]="settlementsTotalPages()" [totalCount]="settlementsTotalCount()" [pageSize]="settlementsPageSize" (pageChange)="onSettlementsPageChange($event)" />
+    </div>
+  }
+}
+
+<!-- ===== Productos por consignador ===== -->
+@if (activeTab() === 'stock') {
+  @if (stockLoading()) {
+    <div class="table-card"><div class="empty-state"><i class="pi pi-spinner pi-spin"></i><p>Cargando...</p></div></div>
+  } @else if (stockGroups().length === 0) {
+    <div class="table-card"><div class="empty-state"><i class="pi pi-box"></i><p>No hay proveedores consignadores activos</p></div></div>
+  } @else {
+    @for (companyGroup of stockGroups(); track companyGroup.companyId) {
+      @if (authService.isSystemAdmin()) {
+        <div class="company-group-header">
+          <i class="pi pi-building"></i>
+          <span class="company-group-name">{{ companyGroup.companyName }}</span>
+        </div>
+      }
+      @for (supplierGroup of companyGroup.suppliers; track supplierGroup.supplierId) {
+        <div class="table-card supplier-stock-card">
+          <div class="table-toolbar">
+            <span class="supplier-stock-name"><i class="pi pi-truck"></i> {{ supplierGroup.supplierName }}</span>
+            <span class="result-count">{{ supplierGroup.rows.length }} registro(s)</span>
+          </div>
+          @if (supplierGroup.rows.length === 0) {
+            <div class="empty-state small"><p>Sin productos asignados todavía</p></div>
+          } @else {
+            <div class="table-scroll">
+              <table class="history-table">
+                <thead>
+                  <tr>
+                    <th>Producto</th>
+                    <th>SKU</th>
+                    <th>Almacén</th>
+                    <th style="text-align: right">Existencia</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of supplierGroup.rows; track row.productId + '-' + row.warehouseName) {
+                    <tr>
+                      <td class="folio-cell">{{ row.productName }}</td>
+                      <td>{{ row.productSku || '—' }}</td>
+                      <td>{{ row.warehouseName }}</td>
+                      <td style="text-align: right">{{ row.quantity | number: '1.0-4' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+      }
+    }
+  }
+}

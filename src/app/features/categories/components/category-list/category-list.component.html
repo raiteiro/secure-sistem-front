@@ -1,0 +1,108 @@
+<p-confirmDialog />
+
+<div class="page-header">
+  <div class="header-left">
+    <i class="pi pi-tag header-icon"></i>
+    <div><h2>Categorías</h2><span class="subtitle">Categorías de productos</span></div>
+  </div>
+  <button class="btn-primary" *appHasPermission="'CATEGORIES.CREATE'" (click)="onCreate()"><i class="pi pi-plus"></i> Nueva categoría</button>
+</div>
+
+<!-- MODAL: Crear/Editar Categoría -->
+<p-dialog [(visible)]="showModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '420px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi" [class.pi-plus-circle]="!isEdit()" [class.pi-pencil]="isEdit()"></i> {{ isEdit() ? 'Editar Categoría' : 'Nueva Categoría' }}</div>
+    <button class="rm-close" (click)="showModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    <div class="rm-field-single">
+      <label>Nombre *</label>
+      <input type="text" [(ngModel)]="form.name" placeholder="ej: Bebidas" />
+    </div>
+    <div class="rm-field-single">
+      <label>Descripción</label>
+      <textarea [(ngModel)]="form.description" rows="2" placeholder="ej: Refrescos y agua"></textarea>
+    </div>
+    @if (!isEdit() && authService.isSystemAdmin()) {
+      <div class="rm-field-single">
+        <label>Empresa</label>
+        <select [(ngModel)]="form.companyId">
+          <option [ngValue]="null">Mi empresa (por defecto)</option>
+          @for (company of companies(); track company.id) {
+            <option [ngValue]="company.id">{{ company.name }}</option>
+          }
+        </select>
+      </div>
+    }
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showModal = false">Cancelar</button>
+    <button class="rm-btn-save" (click)="onSave()" [disabled]="saving()">
+      @if (saving()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+      {{ isEdit() ? 'Actualizar' : 'Crear' }}
+    </button>
+  </div>
+</p-dialog>
+
+@for (group of categoryGroups(); track group.companyId) {
+  <div class="company-group">
+    @if (authService.isSystemAdmin()) {
+      <div class="company-group-header">
+        <i class="pi pi-building"></i>
+        <span class="company-group-name">{{ group.companyName }}</span>
+        <button class="group-add-btn" *appHasPermission="'CATEGORIES.CREATE'" (click)="onCreate(group.companyId)" title="Nueva categoría en esta empresa">
+          <i class="pi pi-plus"></i>
+        </button>
+      </div>
+    }
+
+    <div class="table-card">
+      <div class="table-toolbar">
+        <div class="search-box">
+          <i class="pi pi-search"></i>
+          <input
+            type="text"
+            placeholder="Buscar por nombre..."
+            (input)="dt.filterGlobal($any($event.target).value, 'contains')"
+          />
+        </div>
+        <span class="category-count">{{ group.categories.length }} categoría(s)</span>
+      </div>
+
+      <p-table #dt [value]="group.categories" [loading]="loading()" [rowHover]="true"
+        [globalFilterFields]="['name', 'description']" styleClass="p-datatable-sm">
+        <ng-template pTemplate="header">
+          <tr>
+            <th pSortableColumn="name">Nombre <p-sortIcon field="name" /></th>
+            <th>Descripción</th>
+            <th style="text-align: center; width: 12%">Acciones</th>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-category>
+          <tr>
+            <td><span class="category-name"><i class="pi pi-tag"></i> {{ category.name }}</span></td>
+            <td><span class="category-description">{{ category.description || '—' }}</span></td>
+            <td>
+              <div class="actions-cell">
+                <button class="action-btn edit" *appHasPermission="'CATEGORIES.EDIT'" (click)="onEdit(category)" title="Editar"><i class="pi pi-pencil"></i></button>
+                <button
+                  class="action-btn delete"
+                  *appHasPermission="'CATEGORIES.DEACTIVATE'"
+                  [disabled]="hasActiveProducts(category)"
+                  [title]="hasActiveProducts(category) ? 'No puedes desactivar una categoría con productos activos asignados' : 'Desactivar'"
+                  (click)="onDeactivate(category)"
+                >
+                  <i class="pi pi-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="emptymessage">
+          <tr><td colspan="3"><div class="empty-state"><i class="pi pi-tag"></i><p>No hay categorías configuradas</p></div></td></tr>
+        </ng-template>
+      </p-table>
+    </div>
+  </div>
+}

@@ -1,0 +1,412 @@
+<p-confirmDialog />
+
+<div class="page-header">
+  <div class="header-left">
+    <i class="fas fa-receipt header-icon"></i>
+    <div><h2>Ventas</h2><span class="subtitle">Punto de venta</span></div>
+  </div>
+  <div class="tabs">
+    <button class="tab-btn" [class.active]="activeTab() === 'new'" (click)="onSelectTab('new')">Nueva venta</button>
+    <button class="tab-btn" [class.active]="activeTab() === 'history'" (click)="onSelectTab('history')">Historial</button>
+  </div>
+</div>
+
+<!-- MODAL: Recibo (ver/imprimir/enviar por correo) -->
+<p-dialog [(visible)]="showReceiptModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '480px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi pi-receipt"></i> Recibo de venta</div>
+    <button class="rm-close" (click)="showReceiptModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    @if (receipt(); as r) {
+      <div class="receipt-print-area">
+        <div class="receipt-ticket">
+          @if (receiptLogoUrl(r.companyLogoPath); as logo) {
+            <img [src]="logo" alt="" class="receipt-logo" />
+          }
+          <p class="receipt-company">{{ r.companyName }}</p>
+          @if (r.companyTaxId) { <p class="receipt-meta">{{ r.companyTaxId }}</p> }
+          @if (r.companyAddress) { <p class="receipt-meta">{{ r.companyAddress }}</p> }
+          @if (r.companyPhone) { <p class="receipt-meta">{{ r.companyPhone }}</p> }
+
+          <div class="receipt-divider"></div>
+
+          <p class="receipt-meta">Folio #{{ r.folioNumber }} — {{ r.createdAt | date: 'short' }}</p>
+          @if (r.branchName) { <p class="receipt-meta">Sucursal: {{ r.branchName }}</p> }
+          <p class="receipt-meta">Cajero: {{ r.cashierUsername }}</p>
+          <p class="receipt-meta">Cliente: {{ r.customerName || 'Público en general' }}</p>
+
+          <div class="receipt-divider"></div>
+
+          <table class="receipt-items">
+            <tbody>
+              @for (item of r.items; track item.productName) {
+                <tr>
+                  <td>{{ item.quantity }}x {{ item.productName }}</td>
+                  <td class="receipt-amount">{{ item.lineTotal | number: '1.2-2' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+
+          <div class="receipt-divider"></div>
+
+          <div class="receipt-totals">
+            <div><span>Subtotal</span><span>{{ r.subtotal | number: '1.2-2' }}</span></div>
+            <div><span>Descuento</span><span>-{{ r.discountTotal | number: '1.2-2' }}</span></div>
+            <div><span>Impuesto</span><span>{{ r.taxTotal | number: '1.2-2' }}</span></div>
+            <div class="receipt-grand-total"><span>Total</span><span>{{ r.total | number: '1.2-2' }}</span></div>
+          </div>
+
+          <div class="receipt-divider"></div>
+
+          @for (payment of r.payments; track payment.method) {
+            <p class="receipt-meta">{{ paymentMethodLabels[payment.method] }}: {{ payment.amount | number: '1.2-2' }}</p>
+          }
+        </div>
+      </div>
+
+      <button class="btn-print" (click)="onPrintReceipt()"><i class="pi pi-print"></i> Imprimir</button>
+
+      <div class="rm-field-single receipt-email-field">
+        <label>Enviar por correo a</label>
+        <input type="email" [(ngModel)]="receiptEmailInput" placeholder="correo@ejemplo.com" />
+      </div>
+    } @else if (receiptLoading()) {
+      <div class="history-empty"><i class="pi pi-spinner pi-spin"></i> Cargando recibo...</div>
+    }
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showReceiptModal = false">Cerrar</button>
+    @if (receipt()) {
+      <button class="rm-btn-save" *appHasPermission="'SALES.SEND_RECEIPT'" (click)="onSendReceipt()" [disabled]="sendingReceipt()">
+        @if (sendingReceipt()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-envelope"></i> }
+        Enviar por correo
+      </button>
+    }
+  </div>
+</p-dialog>
+
+<!-- MODAL: Autorización de supervisor para cancelar una venta -->
+<p-dialog [(visible)]="showSupervisorModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '400px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi pi-lock"></i> Autorización requerida</div>
+    <button class="rm-close" (click)="showSupervisorModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    <p class="supervisor-hint">
+      No tienes permiso para cancelar la venta #{{ cancelingSaleFolio }}. Pide a un supervisor con
+      permiso que capture su usuario y contraseña para autorizarla.
+    </p>
+    <div class="rm-field-single">
+      <label>Usuario del supervisor *</label>
+      <input type="text" [(ngModel)]="supervisorForm.username" placeholder="usuario" autocomplete="off" />
+    </div>
+    <div class="rm-field-single">
+      <label>Contraseña *</label>
+      <input type="password" [(ngModel)]="supervisorForm.password" placeholder="••••••••" autocomplete="off" (keyup.enter)="onSaveSupervisorApproval()" />
+    </div>
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showSupervisorModal = false">Cancelar</button>
+    <button class="rm-btn-save" (click)="onSaveSupervisorApproval()" [disabled]="authorizingCancel()">
+      @if (authorizingCancel()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+      Autorizar
+    </button>
+  </div>
+</p-dialog>
+
+@if (activeTab() === 'new') {
+  <!-- Nueva venta: requiere turno de caja propio abierto -->
+  @if (sessionLoading()) {
+    <div class="session-gate"><i class="pi pi-spinner pi-spin"></i> Verificando turno de caja...</div>
+  } @else if (!currentSession()) {
+    <div class="session-gate warn">
+      <i class="pi pi-exclamation-triangle"></i>
+      <div>
+        <p class="gate-title">No tienes un turno de caja abierto</p>
+        <p class="gate-subtitle">Necesitas abrir un turno antes de poder vender.</p>
+      </div>
+      <button class="btn-primary" (click)="goToCashSessions()"><i class="pi pi-lock-open"></i> Abrir turno</button>
+    </div>
+  } @else {
+    <div class="pos-layout">
+      <!-- Columna izquierda: catálogo de productos -->
+      <div class="pos-main">
+        <div class="table-card catalog-card">
+          <div class="catalog-toolbar">
+            <div class="search-box">
+              <i class="pi pi-search"></i>
+              <input
+                type="text"
+                [ngModel]="productSearch()"
+                (ngModelChange)="productSearch.set($event)"
+                placeholder="Buscar producto por nombre o SKU..."
+              />
+            </div>
+            <div class="category-pills">
+              <button class="category-pill" [class.active]="categoryFilter() === null" (click)="selectCategory(null)">Todas</button>
+              @for (chip of categoryChips(); track chip.id) {
+                <button class="category-pill" [class.active]="categoryFilter() === chip.id" (click)="selectCategory(chip.id)">{{ chip.name }}</button>
+              }
+            </div>
+          </div>
+
+          <div class="catalog-scroll">
+            @if (catalogGroups().length === 0) {
+              <div class="empty-state small"><i class="pi pi-box"></i><p>Sin resultados</p></div>
+            }
+            @for (group of catalogGroups(); track group.categoryId) {
+              @if (categoryFilter() === null) {
+                <h4 class="catalog-group-title">{{ group.categoryName }}</h4>
+              }
+              <div class="product-grid">
+                @for (product of group.products; track product.id) {
+                  <button class="product-card" (click)="addToCart(product)">
+                    <span class="product-card-image">
+                      @if (productImageUrl(product); as thumb) {
+                        <img [src]="thumb" alt="" />
+                      } @else {
+                        <i class="pi pi-image"></i>
+                      }
+                      @if (product.isCombo) { <span class="product-card-combo-badge">Combo</span> }
+                    </span>
+                    <span class="product-card-name">{{ product.name }}</span>
+                    <span class="product-card-sku">{{ product.sku || '—' }}</span>
+                    <span class="product-card-price">{{ product.price | number: '1.2-2' }}</span>
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- Columna derecha: venta actual (ticket), datos de venta, totales y pagos -->
+      <div class="pos-side">
+        <div class="side-card cart-card">
+          <h3 class="side-title">Venta actual @if (cartComputed().length > 0) { ({{ cartComputed().length }}) }</h3>
+          <div class="cart-lines">
+            @for (line of cartComputed(); track line.productId) {
+              <div class="cart-line">
+                <div class="cart-line-head">
+                  <span class="cart-line-name">{{ line.productName }}</span>
+                  <button class="remove-btn" (click)="removeLine(line)" title="Quitar"><i class="pi pi-times"></i></button>
+                </div>
+                <span class="cart-line-meta">{{ line.productSku || '—' }} · {{ line.price | number: '1.2-2' }} c/u</span>
+                <div class="cart-line-controls">
+                  <div class="qty-stepper">
+                    <button class="qty-btn" (click)="updateQuantity(line, line.quantity - 1)" [disabled]="line.quantity <= 1"><i class="pi pi-minus"></i></button>
+                    <input
+                      type="number"
+                      class="qty-input"
+                      min="1"
+                      [ngModel]="line.quantity"
+                      (ngModelChange)="updateQuantity(line, $event)"
+                    />
+                    <button class="qty-btn" (click)="updateQuantity(line, line.quantity + 1)"><i class="pi pi-plus"></i></button>
+                  </div>
+                  <input
+                    type="number"
+                    class="discount-input"
+                    min="0"
+                    step="any"
+                    title="Descuento"
+                    placeholder="Desc."
+                    [ngModel]="line.discountAmount || null"
+                    (ngModelChange)="updateDiscount(line, $event)"
+                  />
+                  <span class="cart-line-total">{{ line.lineTotal | number: '1.2-2' }}</span>
+                </div>
+              </div>
+            } @empty {
+              <div class="empty-state small"><i class="pi pi-shopping-cart"></i><p>Toca un producto para agregarlo</p></div>
+            }
+          </div>
+        </div>
+
+        <div class="side-card">
+          <h3 class="side-title">Datos de venta</h3>
+          <div class="rm-field-single">
+            <label>Sucursal *</label>
+            <select [(ngModel)]="selectedBranchId" (ngModelChange)="onBranchChange()">
+              <option [ngValue]="null">Selecciona una sucursal</option>
+              @for (branch of branches(); track branch.id) {
+                <option [ngValue]="branch.id">{{ branch.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="rm-field-single">
+            <label>Almacén *</label>
+            <select [(ngModel)]="selectedWarehouseId">
+              <option [ngValue]="null">Selecciona un almacén</option>
+              @for (warehouse of availableWarehouses(); track warehouse.id) {
+                <option [ngValue]="warehouse.id">{{ warehouse.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="rm-field-single">
+            <label>Cliente</label>
+            <select [(ngModel)]="selectedCustomerId">
+              <option [ngValue]="null">Cliente ocasional</option>
+              @for (customer of customers(); track customer.id) {
+                <option [ngValue]="customer.id">{{ customer.name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        <div class="side-card totals-card">
+          <h3 class="side-title">Totales</h3>
+          <div class="totals-row"><span>Subtotal</span><span>{{ totals().subtotal | number: '1.2-2' }}</span></div>
+          <div class="totals-row"><span>Descuento</span><span>-{{ totals().discountTotal | number: '1.2-2' }}</span></div>
+          <div class="totals-row"><span>Impuesto</span><span>{{ totals().taxTotal | number: '1.2-2' }}</span></div>
+          <div class="totals-row grand-total"><span>Total</span><span>{{ totals().total | number: '1.2-2' }}</span></div>
+        </div>
+
+        <div class="side-card">
+          <h3 class="side-title">Pagos</h3>
+          @for (payment of paymentLines(); track payment.id) {
+            <div class="payment-line">
+              <select
+                class="payment-method-select"
+                [ngModel]="payment.method"
+                (ngModelChange)="updatePaymentMethod(payment.id, $event)"
+              >
+                <option value="Cash">Efectivo</option>
+                <option value="Card">Tarjeta</option>
+                <option value="Other">Otro</option>
+              </select>
+              <input
+                type="number"
+                class="payment-amount-input"
+                min="0"
+                step="any"
+                [ngModel]="payment.amount"
+                (ngModelChange)="updatePaymentAmount(payment.id, $event)"
+                placeholder="Monto"
+              />
+              <button class="remove-btn" (click)="removePaymentLine(payment.id)" title="Quitar pago"><i class="pi pi-times"></i></button>
+            </div>
+            @if (payment.method === 'Cash') {
+              <div class="cash-received-row">
+                <label>Recibido</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  [ngModel]="payment.receivedCash"
+                  (ngModelChange)="updatePaymentReceived(payment.id, $event)"
+                  placeholder="ej: 500"
+                />
+                @if (changeFor(payment) > 0) {
+                  <span class="change-badge">Cambio: {{ changeFor(payment) | number: '1.2-2' }}</span>
+                }
+              </div>
+            }
+          }
+          <button class="add-payment-btn" (click)="addPaymentLine()"><i class="pi pi-plus"></i> Agregar pago</button>
+          <div class="payment-summary" [class.balanced]="remaining() === 0" [class.pending]="remaining() !== 0">
+            @if (remaining() > 0) {
+              <span>Falta cobrar: {{ remaining() | number: '1.2-2' }}</span>
+            } @else if (remaining() < 0) {
+              <span>Pagos exceden el total por: {{ -remaining() | number: '1.2-2' }}</span>
+            } @else {
+              <span><i class="pi pi-check-circle"></i> Pagos completos</span>
+            }
+          </div>
+        </div>
+
+        <button class="submit-sale-btn" *appHasPermission="'SALES.REGISTER'" (click)="onSubmitSale()" [disabled]="saving()">
+          @if (saving()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+          Registrar venta
+        </button>
+      </div>
+    </div>
+  }
+} @else {
+  <!-- Historial: visible sin importar si hay turno abierto, para que un admin de sistema pueda ver ventas de todas las empresas -->
+  <div class="filters-bar">
+    <input type="date" class="filter-date" [(ngModel)]="historyFilterFrom" (ngModelChange)="onHistoryFilterChange()" title="Desde" />
+    <input type="date" class="filter-date" [(ngModel)]="historyFilterTo" (ngModelChange)="onHistoryFilterChange()" title="Hasta" />
+    <select class="filter-select" [(ngModel)]="historyFilterBranchId" (ngModelChange)="onHistoryFilterChange()">
+      <option [ngValue]="null">Todas las sucursales</option>
+      @for (branch of historyBranches(); track branch.id) {
+        <option [ngValue]="branch.id">{{ branch.name }}</option>
+      }
+    </select>
+    <select class="filter-select" [(ngModel)]="historyFilterCustomerId" (ngModelChange)="onHistoryFilterChange()">
+      <option [ngValue]="null">Todos los clientes</option>
+      @for (customer of historyCustomers(); track customer.id) {
+        <option [ngValue]="customer.id">{{ customer.name }}</option>
+      }
+    </select>
+  </div>
+
+  @if (historyLoading()) {
+    <div class="table-card"><div class="empty-state"><i class="pi pi-spinner pi-spin"></i><p>Cargando historial...</p></div></div>
+  } @else if (history().length === 0) {
+    <div class="table-card"><div class="empty-state"><i class="fas fa-receipt"></i><p>No hay ventas registradas</p></div></div>
+  } @else {
+    @for (group of historyGroups(); track group.companyId) {
+      <div class="company-group">
+        @if (authService.isSystemAdmin()) {
+          <div class="company-group-header">
+            <i class="pi pi-building"></i>
+            <span class="company-group-name">{{ group.companyName }}</span>
+          </div>
+        }
+
+        <div class="table-card">
+          <div class="table-toolbar">
+            <span class="sale-count">{{ group.sales.length }} venta(s)</span>
+          </div>
+          <div class="table-scroll">
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th>Folio</th>
+                  <th>Fecha</th>
+                  <th>Sucursal</th>
+                  <th>Cliente</th>
+                  <th style="text-align: right">Total</th>
+                  <th>Estado</th>
+                  <th style="text-align: center; width: 14%">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (sale of group.sales; track sale.id) {
+                  <tr>
+                    <td class="folio-cell">#{{ sale.folioNumber }}</td>
+                    <td>{{ sale.createdAt | date: 'short' }}</td>
+                    <td>{{ sale.branchName || '—' }}</td>
+                    <td>{{ sale.customerName || 'Cliente ocasional' }}</td>
+                    <td style="text-align: right">{{ sale.total | number: '1.2-2' }}</td>
+                    <td>
+                      <span class="status-badge" [class.cancelled]="sale.status === 'Cancelled'">
+                        {{ sale.status === 'Cancelled' ? 'Cancelada' : (sale.status || '—') }}
+                      </span>
+                    </td>
+                    <td>
+                      <div class="actions-cell">
+                        <button class="action-btn print" (click)="onViewReceipt(sale)" title="Ver / imprimir recibo"><i class="pi pi-receipt"></i></button>
+                        @if (sale.status === 'Completed') {
+                          <button class="action-btn cancel" (click)="onCancelSale(sale)" title="Cancelar venta"><i class="pi pi-ban"></i></button>
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    }
+    <div class="table-card">
+      <app-pager [page]="historyPage()" [totalPages]="historyTotalPages()" [totalCount]="historyTotalCount()" [pageSize]="historyPageSize" (pageChange)="onHistoryPageChange($event)" />
+    </div>
+  }
+}

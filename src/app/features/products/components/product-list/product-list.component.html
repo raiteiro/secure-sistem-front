@@ -1,0 +1,278 @@
+<p-confirmDialog />
+
+<div class="page-header">
+  <div class="header-left">
+    <i class="pi pi-box header-icon"></i>
+    <div><h2>Productos</h2><span class="subtitle">Catálogo de productos</span></div>
+  </div>
+  <button class="btn-primary" *appHasPermission="'PRODUCTS.CREATE'" (click)="onCreate()"><i class="pi pi-plus"></i> Nuevo producto</button>
+</div>
+
+<!-- MODAL: Crear/Editar Producto -->
+<p-dialog [(visible)]="showModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '520px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi" [class.pi-plus-circle]="!isEdit()" [class.pi-pencil]="isEdit()"></i> {{ isEdit() ? 'Editar Producto' : 'Nuevo Producto' }}</div>
+    <button class="rm-close" (click)="showModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    <div class="rm-row">
+      <div class="rm-field">
+        <label>Nombre *</label>
+        <input type="text" [(ngModel)]="form.name" placeholder="ej: Test Widget" />
+      </div>
+      <div class="rm-field">
+        <label>SKU</label>
+        <input type="text" [(ngModel)]="form.sku" placeholder="ej: TW-001" />
+      </div>
+    </div>
+    <div class="rm-field-single">
+      <label>Descripción</label>
+      <textarea [(ngModel)]="form.description" rows="2" placeholder="Descripción del producto..."></textarea>
+    </div>
+    <div class="rm-field-single">
+      <label>Proveedor</label>
+      <select [(ngModel)]="form.supplierId" (ngModelChange)="onSupplierChange()">
+        <option [ngValue]="null">Sin proveedor</option>
+        @for (supplier of availableSuppliers(); track supplier.id) {
+          <option [ngValue]="supplier.id">{{ supplier.name }}{{ supplier.isConsignor ? ' (consignador)' : '' }}</option>
+        }
+      </select>
+    </div>
+    @if (selectedSupplierIsConsignor()) {
+      <div class="rm-row">
+        <div class="rm-field">
+          <label>Tipo de comisión *</label>
+          <select [(ngModel)]="form.commissionType">
+            <option value="Percentage">% para la tienda</option>
+            <option value="FixedAmount">Monto fijo por unidad</option>
+          </select>
+        </div>
+        <div class="rm-field">
+          <label>{{ form.commissionType === 'Percentage' ? 'Comisión de la tienda (%) *' : 'Pago al consignador por unidad *' }}</label>
+          <input type="number" [(ngModel)]="form.commissionValue" min="0" [max]="form.commissionType === 'Percentage' ? 100 : null" step="any" [placeholder]="form.commissionType === 'Percentage' ? 'ej: 30' : 'ej: 50.00'" />
+        </div>
+      </div>
+    }
+    <div class="rm-row">
+      <div class="rm-field">
+        <label>Precio *</label>
+        <input type="number" [(ngModel)]="form.price" min="0" step="any" placeholder="ej: 100.00" />
+      </div>
+      <div class="rm-field">
+        <label>Costo</label>
+        @if (selectedSupplierIsConsignor()) {
+          <input type="number" class="readonly-input" [ngModel]="resolvedCost()" disabled placeholder="Se calcula solo" />
+        } @else {
+          <input type="number" [(ngModel)]="form.cost" min="0" step="any" placeholder="ej: 60.00" />
+        }
+      </div>
+    </div>
+    @if (selectedSupplierIsConsignor()) {
+      <p class="cost-hint">
+        <i class="pi pi-info-circle"></i> El costo se calcula solo a partir de la comisión — no se puede editar en productos de un proveedor consignador.
+      </p>
+    }
+    <div class="rm-row">
+      <div class="rm-field">
+        <label>Unidad</label>
+        <input type="text" [(ngModel)]="form.unit" placeholder="ej: pz" />
+      </div>
+      <div class="rm-field">
+        <label>Impuesto</label>
+        <select [(ngModel)]="form.taxRateId">
+          <option [ngValue]="null">Sin impuesto</option>
+          @for (taxRate of availableTaxRates(); track taxRate.id) {
+            <option [ngValue]="taxRate.id">{{ taxRate.name }}</option>
+          }
+        </select>
+      </div>
+    </div>
+    <div class="rm-field-single">
+      <label>Categoría</label>
+      <select [(ngModel)]="form.categoryId">
+        <option [ngValue]="null">Sin categoría</option>
+        @for (category of availableCategories(); track category.id) {
+          <option [ngValue]="category.id">{{ category.name }}</option>
+        }
+      </select>
+    </div>
+    <div class="rm-switch-row">
+      <span class="rm-switch-label">Es un combo/kit</span>
+      <label class="rm-toggle">
+        <input type="checkbox" [(ngModel)]="form.isCombo" />
+        <span class="rm-slider"></span>
+      </label>
+    </div>
+    @if (!isEdit() && authService.isSystemAdmin()) {
+      <div class="rm-field-single">
+        <label>Empresa</label>
+        <select [(ngModel)]="form.companyId" (ngModelChange)="onCompanyChange()">
+          <option [ngValue]="null">Mi empresa (por defecto)</option>
+          @for (company of companies(); track company.id) {
+            <option [ngValue]="company.id">{{ company.name }}</option>
+          }
+        </select>
+      </div>
+    }
+    @if (isEdit()) {
+      <div class="rm-field-single">
+        <label>Imagen</label>
+        <div class="image-upload-row">
+          @if (imageUrl(); as image) {
+            <img [src]="image" class="image-preview" alt="Imagen actual" />
+          } @else {
+            <div class="image-preview image-preview-empty"><i class="pi pi-image"></i></div>
+          }
+          <label class="image-upload-btn" [class.disabled]="uploadingImage()">
+            @if (uploadingImage()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-upload"></i> }
+            {{ uploadingImage() ? 'Subiendo...' : (imageUrl() ? 'Cambiar imagen' : 'Subir imagen') }}
+            <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" [disabled]="uploadingImage()" (change)="onImageFileSelected($event)" hidden />
+          </label>
+        </div>
+        <span class="image-hint">PNG, JPEG, WEBP o GIF · máx. 2 MB</span>
+      </div>
+    }
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showModal = false">Cancelar</button>
+    <button class="rm-btn-save" (click)="onSave()" [disabled]="saving()">
+      @if (saving()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+      {{ isEdit() ? 'Actualizar' : 'Crear' }}
+    </button>
+  </div>
+</p-dialog>
+
+<!-- MODAL: Componentes del combo -->
+<p-dialog [(visible)]="showComboModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '520px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi pi-box"></i> Componentes de "{{ comboProductName }}"</div>
+    <button class="rm-close" (click)="showComboModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    <div class="rm-row">
+      <div class="rm-field">
+        <label>Producto</label>
+        <select [(ngModel)]="comboAddProductId">
+          <option [ngValue]="null">Selecciona un producto</option>
+          @for (component of availableComboComponents(); track component.id) {
+            <option [ngValue]="component.id">{{ component.name }} @if (component.sku) { ({{ component.sku }}) }</option>
+          }
+        </select>
+      </div>
+      <div class="rm-field">
+        <label>Cantidad</label>
+        <input type="number" [(ngModel)]="comboAddQuantity" min="1" step="any" placeholder="ej: 1" />
+      </div>
+    </div>
+    <button class="btn-secondary" (click)="onAddComboItem()"><i class="pi pi-plus"></i> Agregar componente</button>
+
+    @if (comboItems().length === 0) {
+      <p class="combo-empty-hint">Este combo todavía no tiene componentes.</p>
+    } @else {
+      <table class="combo-items-table">
+        <thead>
+          <tr><th>Producto</th><th style="text-align: right">Cantidad</th><th style="width: 40px"></th></tr>
+        </thead>
+        <tbody>
+          @for (item of comboItems(); track item.componentProductId) {
+            <tr>
+              <td>
+                <span class="cart-product-name">{{ item.componentProductName }}</span>
+                <span class="cart-product-sku">{{ item.componentProductSku || '—' }}</span>
+              </td>
+              <td style="text-align: right">{{ item.quantity | number: '1.0-4' }}</td>
+              <td style="text-align: center">
+                <button class="remove-item-btn" (click)="onRemoveComboItem(item.componentProductId)" title="Quitar"><i class="pi pi-times"></i></button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+  <div class="rm-footer">
+    <span class="combo-items-count">{{ comboItems().length }} componente(s)</span>
+    <button class="rm-btn-cancel" (click)="showComboModal = false">Cancelar</button>
+    <button class="rm-btn-save" (click)="onSaveComboItems()" [disabled]="savingCombo()">
+      @if (savingCombo()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+      Guardar
+    </button>
+  </div>
+</p-dialog>
+
+@for (group of productGroups(); track group.companyId) {
+  <div class="company-group">
+    @if (authService.isSystemAdmin()) {
+      <div class="company-group-header">
+        <i class="pi pi-building"></i>
+        <span class="company-group-name">{{ group.companyName }}</span>
+        <button class="group-add-btn" *appHasPermission="'PRODUCTS.CREATE'" (click)="onCreate(group.companyId)" title="Nuevo producto en esta empresa">
+          <i class="pi pi-plus"></i>
+        </button>
+      </div>
+    }
+
+    <div class="table-card">
+      <div class="table-toolbar">
+        <div class="search-box">
+          <i class="pi pi-search"></i>
+          <input
+            type="text"
+            placeholder="Buscar por nombre, SKU, categoría..."
+            (input)="dt.filterGlobal($any($event.target).value, 'contains')"
+          />
+        </div>
+        <span class="product-count">{{ group.products.length }} producto(s)</span>
+      </div>
+
+      <p-table #dt [value]="group.products" [loading]="loading()" [rowHover]="true"
+        [globalFilterFields]="['name', 'sku', 'categoryName']" styleClass="p-datatable-sm">
+        <ng-template pTemplate="header">
+          <tr>
+            <th style="width: 48px"></th>
+            <th pSortableColumn="name">Nombre <p-sortIcon field="name" /></th>
+            <th>SKU</th>
+            <th>Categoría</th>
+            <th style="text-align: right">Precio</th>
+            <th>Impuesto</th>
+            <th style="text-align: center; width: 12%">Acciones</th>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-product>
+          <tr>
+            <td>
+              @if (imageThumbUrl(product); as thumb) {
+                <img [src]="thumb" class="product-thumb" alt="" />
+              } @else {
+                <div class="product-thumb product-thumb-empty"><i class="pi pi-image"></i></div>
+              }
+            </td>
+            <td>
+              <span class="product-name">{{ product.name }}</span>
+              @if (product.isCombo) { <span class="combo-badge" title="Combo/kit">Combo</span> }
+              @if (product.supplierIsConsignor) { <span class="consignor-badge" [title]="'Consignado por ' + product.supplierName">Consignación</span> }
+            </td>
+            <td><span class="product-sku">{{ product.sku || '—' }}</span></td>
+            <td>{{ product.categoryName || '—' }}</td>
+            <td style="text-align: right">{{ product.price | number: '1.2-2' }}</td>
+            <td>{{ product.taxRateName || '—' }}</td>
+            <td>
+              <div class="actions-cell">
+                @if (product.isCombo) {
+                  <button class="action-btn combo" *appHasPermission="'PRODUCTS.ASSIGN_COMBO_ITEMS'" (click)="onManageComboItems(product)" title="Editar componentes"><i class="pi pi-box"></i></button>
+                }
+                <button class="action-btn edit" *appHasPermission="'PRODUCTS.EDIT'" (click)="onEdit(product)" title="Editar"><i class="pi pi-pencil"></i></button>
+                <button class="action-btn delete" *appHasPermission="'PRODUCTS.DEACTIVATE'" (click)="onDeactivate(product)" title="Desactivar"><i class="pi pi-trash"></i></button>
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="emptymessage">
+          <tr><td colspan="7"><div class="empty-state"><i class="pi pi-box"></i><p>No hay productos configurados</p></div></td></tr>
+        </ng-template>
+      </p-table>
+    </div>
+  </div>
+}

@@ -64,6 +64,80 @@ export const routes: Routes = [
           import('./features/companies/companies.routes').then((m) => m.COMPANIES_ROUTES)
       },
       {
+        path: 'catalogo/sucursales',
+        loadChildren: () =>
+          import('./features/branches/branches.routes').then((m) => m.BRANCHES_ROUTES)
+      },
+      {
+        path: 'catalogo/almacenes',
+        loadChildren: () =>
+          import('./features/warehouses/warehouses.routes').then((m) => m.WAREHOUSES_ROUTES)
+      },
+      {
+        path: 'catalogo/inventario',
+        loadChildren: () =>
+          import('./features/inventory/inventory.routes').then((m) => m.INVENTORY_ROUTES)
+      },
+      {
+        path: 'catalogo/impuestos',
+        loadChildren: () =>
+          import('./features/tax-rates/tax-rates.routes').then((m) => m.TAX_RATES_ROUTES)
+      },
+      {
+        path: 'catalogo/categorias',
+        loadChildren: () =>
+          import('./features/categories/categories.routes').then((m) => m.CATEGORIES_ROUTES)
+      },
+      {
+        path: 'catalogo/productos',
+        loadChildren: () =>
+          import('./features/products/products.routes').then((m) => m.PRODUCTS_ROUTES)
+      },
+      {
+        path: 'catalogo/clientes',
+        loadChildren: () =>
+          import('./features/customers/customers.routes').then((m) => m.CUSTOMERS_ROUTES)
+      },
+      {
+        path: 'catalogo/proveedores',
+        loadChildren: () =>
+          import('./features/suppliers/suppliers.routes').then((m) => m.SUPPLIERS_ROUTES)
+      },
+      {
+        path: 'caja/cajas',
+        loadChildren: () =>
+          import('./features/cash-registers/cash-registers.routes').then(
+            (m) => m.CASH_REGISTERS_ROUTES
+          )
+      },
+      {
+        path: 'caja/turnos',
+        loadChildren: () =>
+          import('./features/cash-sessions/cash-sessions.routes').then(
+            (m) => m.CASH_SESSIONS_ROUTES
+          )
+      },
+      {
+        path: 'ventas',
+        loadChildren: () =>
+          import('./features/sales/sales.routes').then((m) => m.SALES_ROUTES)
+      },
+      {
+        path: 'devoluciones',
+        loadChildren: () =>
+          import('./features/returns/returns.routes').then((m) => m.RETURNS_ROUTES)
+      },
+      {
+        path: 'reportes',
+        loadChildren: () =>
+          import('./features/reports/reports.routes').then((m) => m.REPORTS_ROUTES)
+      },
+      {
+        path: 'consignaciones',
+        loadChildren: () =>
+          import('./features/consignment/consignment.routes').then((m) => m.CONSIGNMENT_ROUTES)
+      },
+      {
         path: '**',
         loadComponent: () =>
           import('./features/not-found/not-found.component').then((m) => m.NotFoundComponent)
