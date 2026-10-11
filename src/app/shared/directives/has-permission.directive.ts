@@ -1,4 +1,4 @@
-import { Directive, TemplateRef, ViewContainerRef, effect, inject, input } from '@angular/core';
+import { Directive, TemplateRef, ViewContainerRef, effect, inject, input, untracked } from '@angular/core';
 import { PermissionsService } from '../../core/services/permissions.service';
 
 /**
@@ -21,13 +21,19 @@ export class HasPermissionDirective {
   constructor() {
     effect(() => {
       const allowed = this.permissionsService.has(this.appHasPermission());
-      if (allowed && !this.hasView) {
-        this.viewContainer.createEmbeddedView(this.templateRef);
-        this.hasView = true;
-      } else if (!allowed && this.hasView) {
-        this.viewContainer.clear();
-        this.hasView = false;
-      }
+      // untracked: crear/destruir la vista puede escribir signals de sus hijos (NG0600 en Angular < 19)
+      // y así el effect tampoco se suscribe a lo que lean esos hijos al crearse
+      untracked(() => this.updateView(allowed));
     });
+  }
+
+  private updateView(allowed: boolean): void {
+    if (allowed && !this.hasView) {
+      this.viewContainer.createEmbeddedView(this.templateRef);
+      this.hasView = true;
+    } else if (!allowed && this.hasView) {
+      this.viewContainer.clear();
+      this.hasView = false;
+    }
   }
 }

@@ -1,4 +1,16 @@
-import { InventoryMovementType } from '../models/inventory.models';
+import { InventoryMovementType, ManualInventoryMovementType } from '../models/inventory.models';
+
+/** Etiqueta en español de cada tipo de movimiento, para historiales */
+export const INVENTORY_MOVEMENT_TYPE_LABELS: Record<InventoryMovementType, string> = {
+  In: 'Entrada',
+  Out: 'Salida',
+  Adjustment: 'Ajuste',
+  Purchase: 'Compra',
+  Sale: 'Venta',
+  Return: 'Devolución',
+  Production: 'Producción',
+  Disassembly: 'Separación'
+};
 
 /**
  * Arma el `quantity` con el signo que exige el backend según `type`:
@@ -8,7 +20,7 @@ import { InventoryMovementType } from '../models/inventory.models';
  * `magnitude` siempre se captura como positivo en el formulario — aquí se le aplica el signo correcto.
  */
 export function signedMovementQuantity(
-  type: InventoryMovementType,
+  type: ManualInventoryMovementType,
   magnitude: number,
   direction: 'increase' | 'decrease'
 ): number {

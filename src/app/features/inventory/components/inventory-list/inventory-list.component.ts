@@ -9,10 +9,12 @@ import { InventoryMovementsService } from '../../services/inventory-movements.se
 import { CompaniesService } from '../../../companies/services/companies.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import {
+  IComboAvailability,
   IInventoryItem,
-  IInventoryMovement,
-  InventoryMovementType
+  IInventoryMovement
 } from '../../../../core/models/inventory.models';
+import { INVENTORY_MOVEMENT_TYPE_LABELS } from '../../../../core/utils/inventory-movement.util';
+import { ComboAvailabilityTableComponent } from '../combo-availability-table/combo-availability-table.component';
 import { ICompany } from '../../../../core/models/company.models';
 import { NotificationService } from '../../../../core/services/notification.service';
 
@@ -20,21 +22,13 @@ interface IInventoryGroup {
   companyId: number;
   companyName: string;
   items: IInventoryItem[];
+  combos: IComboAvailability[];
 }
-
-const MOVEMENT_TYPE_LABELS: Record<InventoryMovementType, string> = {
-  In: 'Entrada',
-  Out: 'Salida',
-  Adjustment: 'Ajuste',
-  Purchase: 'Compra',
-  Sale: 'Venta',
-  Return: 'Devolución'
-};
 
 @Component({
   selector: 'app-inventory-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, TableModule, DialogModule, PagerComponent],
+  imports: [CommonModule, FormsModule, TableModule, DialogModule, PagerComponent, ComboAvailabilityTableComponent],
   templateUrl: './inventory-list.component.html',
   styleUrl: './inventory-list.component.scss'
 })
@@ -45,10 +39,12 @@ export class InventoryListComponent implements OnInit {
   private readonly notify = inject(NotificationService);
   readonly authService = inject(AuthService);
 
-  readonly movementTypeLabels = MOVEMENT_TYPE_LABELS;
+  readonly movementTypeLabels = INVENTORY_MOVEMENT_TYPE_LABELS;
 
   items = signal<IInventoryItem[]>([]);
   loading = signal(true);
+  combos = signal<IComboAvailability[]>([]);
+  loadingCombos = signal(true);
   companies = signal<ICompany[]>([]);
   lowStockOnly = signal(false);
 
@@ -79,6 +75,12 @@ export class InventoryListComponent implements OnInit {
       next: (data) => { this.items.set(data); this.loading.set(false); },
       error: () => { this.notify.error('No se pudo cargar el inventario'); this.loading.set(false); }
     });
+
+    this.loadingCombos.set(true);
+    this.inventoryService.getComboAvailability().subscribe({
+      next: (data) => { this.combos.set(data); this.loadingCombos.set(false); },
+      error: () => { this.notify.error('No se pudo calcular la disponibilidad de combos'); this.loadingCombos.set(false); }
+    });
   }
 
   companyName(companyId?: number): string {
@@ -92,27 +94,27 @@ export class InventoryListComponent implements OnInit {
 
   /** Separa la tabla por empresa cuando quien mira es admin de sistema; para el resto es un único grupo */
   readonly inventoryGroups = computed<IInventoryGroup[]>(() => {
-    const filtered = this.lowStockOnly() ? this.items().filter((i) => i.isLowStock) : this.items();
+    const lowStockOnly = this.lowStockOnly();
+    const filtered = lowStockOnly ? this.items().filter((i) => i.isLowStock) : this.items();
+    // Un combo no tiene stock mínimo propio: con el filtro de bajo stock se muestran los que no se pueden vender
+    const combos = lowStockOnly ? this.combos().filter((c) => c.availableQuantity <= 0) : this.combos();
 
     if (!this.authService.isSystemAdmin()) {
-      return [{ companyId: 0, companyName: '', items: filtered }];
+      return [{ companyId: 0, companyName: '', items: filtered, combos }];
     }
 
-    const byCompany = new Map<number, IInventoryItem[]>();
-    for (const item of filtered) {
-      const companyId = item.companyId ?? 0;
-      const list = byCompany.get(companyId) ?? [];
-      list.push(item);
-      byCompany.set(companyId, list);
-    }
+    const byCompany = new Map<number, IInventoryGroup>();
+    const groupOf = (companyId: number): IInventoryGroup => {
+      const existing = byCompany.get(companyId);
+      if (existing) return existing;
+      const created: IInventoryGroup = { companyId, companyName: this.companyName(companyId), items: [], combos: [] };
+      byCompany.set(companyId, created);
+      return created;
+    };
+    for (const item of filtered) groupOf(item.companyId ?? 0).items.push(item);
+    for (const combo of combos) groupOf(combo.companyId).combos.push(combo);
 
-    return [...byCompany.entries()]
-      .sort((a, b) => a[0] - b[0])
-      .map(([companyId, list]) => ({
-        companyId,
-        companyName: this.companyName(companyId),
-        items: list
-      }));
+    return [...byCompany.values()].sort((a, b) => a.companyId - b.companyId);
   });
 
   // ===== Historial =====

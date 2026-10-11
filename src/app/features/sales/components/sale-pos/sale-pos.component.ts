@@ -3,6 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
+import { forkJoin } from 'rxjs';
+import { floorToAllowedDecimals, quantityDecimalsError, quantityStep } from '../../../../core/utils/quantity.util';
 import { ConfirmationService } from 'primeng/api';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { DialogModule } from 'primeng/dialog';
@@ -16,6 +18,7 @@ import { BranchesService } from '../../../branches/services/branches.service';
 import { WarehousesService } from '../../../warehouses/services/warehouses.service';
 import { CustomersService } from '../../../customers/services/customers.service';
 import { CompaniesService } from '../../../companies/services/companies.service';
+import { InventoryService } from '../../../inventory/services/inventory.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { ICashSession } from '../../../../core/models/cash-session.models';
@@ -74,6 +77,9 @@ interface ICartLine {
   productSku: string | null;
   price: number;
   taxRateValue: number | null;
+  /** Unidad del producto: decide si la cantidad acepta decimales */
+  unitAbbreviation: string;
+  unitDecimalPlaces: number;
   quantity: number;
   discountAmount: number;
 }
@@ -100,6 +106,12 @@ const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   Other: 'Otro'
 };
 
+/** Un componente de combo y cuánto lleva por cada combo */
+interface IComboComponentUsage {
+  productId: number;
+  perCombo: number;
+}
+
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
@@ -122,6 +134,7 @@ export class SalePosComponent implements OnInit {
   private readonly warehousesService = inject(WarehousesService);
   private readonly customersService = inject(CustomersService);
   private readonly companiesService = inject(CompaniesService);
+  private readonly inventoryService = inject(InventoryService);
   private readonly notify = inject(NotificationService);
   private readonly router = inject(Router);
   readonly authService = inject(AuthService);
@@ -153,6 +166,15 @@ export class SalePosComponent implements OnInit {
   private nextPaymentLineId = 0;
 
   saving = signal(false);
+
+  // ===== Existencias del almacén seleccionado =====
+  /** Stock por productId (productos normales y fabricados). Los que no aparecen tienen 0 */
+  private readonly stockByProduct = signal<Record<number, number>>({});
+  /** Componentes de cada combo, por id del combo — un combo no tiene stock propio, descuenta estos */
+  private readonly comboComponents = signal<Record<number, IComboComponentUsage[]>>({});
+  stockLoading = signal(false);
+  /** Almacén al que corresponden las existencias cargadas (null = ninguno seleccionado) */
+  stockWarehouseId = signal<number | null>(null);
 
   // ===== Historial (independiente del turno — visible para cualquiera, incl. sisAdmin sin turno propio) =====
   history = signal<ISale[]>([]);
@@ -250,7 +272,8 @@ export class SalePosComponent implements OnInit {
       error: () => this.notify.error('No se pudieron cargar los clientes')
     });
     this.productsService.getAll().subscribe({
-      next: (data) => this.products.set(data.filter((p) => p.companyId === companyId && p.isActive)),
+      // Los insumos no se venden (el backend rechaza la venta): no aparecen en el catálogo del POS
+      next: (data) => this.products.set(data.filter((p) => p.companyId === companyId && p.isActive && p.kind !== 'Supply')),
       error: () => this.notify.error('No se pudieron cargar los productos')
     });
   }
@@ -263,7 +286,10 @@ export class SalePosComponent implements OnInit {
         if (!register) return;
         this.selectedBranchId = register.branchId;
         const warehouse = this.warehouses().find((w) => w.branchId === register.branchId);
-        if (warehouse) this.selectedWarehouseId = warehouse.id;
+        if (warehouse) {
+          this.selectedWarehouseId = warehouse.id;
+          this.loadStock();
+        }
       },
       error: () => {}
     });
@@ -271,12 +297,117 @@ export class SalePosComponent implements OnInit {
 
   onBranchChange(): void {
     this.selectedWarehouseId = null;
+    this.loadStock();
   }
 
-  readonly availableWarehouses = computed<IWarehouse[]>(() => {
+  onWarehouseChange(): void {
+    this.loadStock();
+  }
+
+  /** Existencias del almacén seleccionado: stock de productos + componentes de combos */
+  loadStock(): void {
+    const warehouseId = this.selectedWarehouseId;
+    this.stockWarehouseId.set(warehouseId);
+    if (!warehouseId) {
+      this.stockByProduct.set({});
+      this.comboComponents.set({});
+      return;
+    }
+
+    this.stockLoading.set(true);
+    forkJoin({
+      inventory: this.inventoryService.getAll({ warehouseId }),
+      combos: this.inventoryService.getComboAvailability({ warehouseId })
+    }).subscribe({
+      next: ({ inventory, combos }) => {
+        // Si mientras cargaba se eligió otro almacén, esta respuesta ya no aplica
+        if (this.selectedWarehouseId !== warehouseId) return;
+        const stock: Record<number, number> = {};
+        for (const item of inventory) stock[item.productId] = item.quantity;
+        const components: Record<number, IComboComponentUsage[]> = {};
+        for (const combo of combos) {
+          components[combo.comboProductId] = combo.components.map((c) => ({
+            productId: c.componentProductId,
+            perCombo: c.quantityPerCombo
+          }));
+          // Un componente inactivo hace que el backend rechace la venta del combo: cuenta como sin stock
+          for (const c of combo.components) {
+            if (!c.isActive) stock[c.componentProductId] = 0;
+          }
+        }
+        this.stockByProduct.set(stock);
+        this.comboComponents.set(components);
+        this.stockLoading.set(false);
+      },
+      error: (e) => {
+        this.stockLoading.set(false);
+        this.notify.httpError(e);
+      }
+    });
+  }
+
+  /** Cuánto stock de cada producto base consume el carrito (los combos cuentan por sus componentes) */
+  private readonly cartUsage = computed<Record<number, number>>(() => {
+    const combos = this.comboComponents();
+    const usage: Record<number, number> = {};
+    for (const line of this.cartItems()) {
+      const components = combos[line.productId];
+      if (components) {
+        for (const c of components) usage[c.productId] = (usage[c.productId] ?? 0) + c.perCombo * line.quantity;
+      } else {
+        usage[line.productId] = (usage[line.productId] ?? 0) + line.quantity;
+      }
+    }
+    return usage;
+  });
+
+  /**
+   * Cuántas unidades más de cada producto se pueden agregar al carrito con el stock del almacén,
+   * descontando lo que ya consume el carrito. Un combo sin componentes activos da 0, igual que el backend.
+   */
+  readonly availableByProduct = computed<Record<number, number>>(() => {
+    const stock = this.stockByProduct();
+    const combos = this.comboComponents();
+    const usage = this.cartUsage();
+    const free = (productId: number) => Math.max((stock[productId] ?? 0) - (usage[productId] ?? 0), 0);
+
+    const available: Record<number, number> = {};
+    for (const product of this.products()) {
+      if (product.isCombo) {
+        const components = combos[product.id] ?? [];
+        available[product.id] = components.length === 0
+          ? 0
+          : Math.min(...components.map((c) => Math.floor(free(c.productId) / c.perCombo)));
+      } else {
+        // Se recorta a los decimales de la unidad: con 2.7 de algo que se vende por pieza, se pueden 2
+        available[product.id] = floorToAllowedDecimals(free(product.id), product.unitDecimalPlaces);
+      }
+    }
+    return available;
+  });
+
+  availableFor(productId: number): number {
+    return this.availableByProduct()[productId] ?? 0;
+  }
+
+  /** Productos base cuyo consumo en el carrito supera el stock (ej. después de cambiar de almacén) */
+  readonly cartStockIssues = computed<string[]>(() => {
+    if (!this.stockWarehouseId()) return [];
+    const stock = this.stockByProduct();
+    const names = new Map(this.products().map((p) => [p.id, p.name]));
+    return Object.entries(this.cartUsage())
+      .filter(([productId, used]) => used > (stock[Number(productId)] ?? 0))
+      .map(([productId]) => names.get(Number(productId)) ?? `#${productId}`);
+  });
+
+  /**
+   * Método normal, NO `computed()`: depende de `selectedBranchId`, que es una propiedad plana (no un
+   * signal) — un `computed()` se quedaba congelado en la sucursal de la primera lectura.
+   */
+  availableWarehouses(): IWarehouse[] {
     if (!this.selectedBranchId) return this.warehouses();
     return this.warehouses().filter((w) => w.branchId === this.selectedBranchId || w.branchId === null);
-  });
+  }
 
   readonly filteredProducts = computed<IProduct[]>(() => {
     const term = this.productSearch().trim().toLowerCase();
@@ -325,6 +456,15 @@ export class SalePosComponent implements OnInit {
 
   // ===== Carrito =====
   addToCart(product: IProduct): void {
+    if (!this.selectedWarehouseId) {
+      this.notify.warn('Selecciona el almacén de donde sale la venta');
+      return;
+    }
+    const available = this.availableFor(product.id);
+    if (available <= 0) {
+      this.notify.warn(`Sin existencias de "${product.name}" en este almacén`);
+      return;
+    }
     const existing = this.cartItems().find((line) => line.productId === product.id);
     if (existing) {
       this.updateQuantity(existing, existing.quantity + 1);
@@ -338,14 +478,34 @@ export class SalePosComponent implements OnInit {
         productSku: product.sku,
         price: product.price,
         taxRateValue: product.taxRateValue,
-        quantity: 1,
+        unitAbbreviation: product.unitAbbreviation,
+        unitDecimalPlaces: product.unitDecimalPlaces,
+        // Con stock fraccionario (ej. 0.5 kg) se agrega lo que haya
+        quantity: Math.min(1, available),
         discountAmount: 0
       }
     ]);
   }
 
+  /** `step` del input de cantidad de una línea del carrito: el de la unidad del producto */
+  lineStep(line: ICartLine): number {
+    return quantityStep(line.unitDecimalPlaces);
+  }
+
   updateQuantity(line: ICartLine, quantity: number): void {
-    if (quantity < 1) return;
+    if (!quantity || quantity <= 0) return;
+    const decimalsError = quantityDecimalsError(quantity, line.unitDecimalPlaces, line.productName);
+    if (decimalsError) {
+      this.notify.warn(decimalsError);
+      return;
+    }
+    // Tope: lo que ya tiene la línea + lo que queda libre en el almacén
+    const max = line.quantity + this.availableFor(line.productId);
+    if (quantity > max) {
+      this.notify.warn(`Solo hay ${max} de "${line.productName}" disponibles en este almacén`);
+      if (max === line.quantity) return;
+      quantity = max;
+    }
     this.cartItems.update((lines) =>
       lines.map((l) => (l.productId === line.productId ? { ...l, quantity } : l))
     );
@@ -429,6 +589,11 @@ export class SalePosComponent implements OnInit {
       this.notify.warn('Agrega al menos un producto');
       return;
     }
+    const stockIssues = this.cartStockIssues();
+    if (stockIssues.length > 0) {
+      this.notify.warn(`No hay existencias suficientes en este almacén de: ${stockIssues.join(', ')}`);
+      return;
+    }
     if (this.paidAmount() === 0 && this.totals().total > 0) {
       this.notify.warn('Registra al menos un pago');
       return;
@@ -459,6 +624,7 @@ export class SalePosComponent implements OnInit {
         this.cartItems.set([]);
         this.paymentLines.set([]);
         this.selectedCustomerId = null;
+        this.loadStock();
         if (this.activeTab() === 'history') this.loadHistory();
       },
       error: (e) => { this.saving.set(false); this.notify.httpError(e); }

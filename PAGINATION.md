@@ -91,6 +91,14 @@ cientos o miles de filas. No necesitan `from`/`to` (no son eventos en el tiempo,
 | `GET /api/Users` | Crece con la plantilla de la empresa, normalmente no es enorme pero puede acumularse |
 | `GET /api/reports/cashier-closeouts` | Ya tiene `from`/`to`; con rangos largos puede devolver muchos turnos cerrados |
 
+**✅ Backend ya los paginó** (los 5 de arriba, más `GET /api/PurchaseOrders` y `GET /api/Quotes`, que
+aún no tienen pantalla en el frontend). **Frontend, solo compatibilidad por ahora**: cada service
+expone `getPage()` (una página, `IPagedResult<T>`) y `getAll()`, que recorre todas las páginas de
+100 en 100 con `fetchAllPages()` (`core/utils/fetch-all-pages.util.ts`) y devuelve el `T[]` de
+siempre — así el POS, los selectores y las tablas que agrupan en cliente siguen recibiendo la lista
+completa sin cambios. Pendiente: que las pantallas de listado (Productos, Clientes, Inventario,
+Usuarios, reporte de cortes) usen `getPage()` + `<app-pager>` para paginar de verdad.
+
 ## Prioridad baja — catálogos acotados (opcional, "nice to have")
 
 Estos casi nunca van a tener más de unas cuantas decenas de filas por empresa. Paginar aquí es más

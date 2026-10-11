@@ -54,33 +54,63 @@
         <button class="btn-link" (click)="onSearchAnotherSale()">Buscar otra venta</button>
       </div>
 
-      <table class="return-items-table">
-        <thead>
-          <tr><th>Producto</th><th style="text-align: right">Vendido</th><th style="width: 100px">A devolver</th></tr>
-        </thead>
-        <tbody>
-          @for (line of returnLines(); track line.saleItemId) {
+      @if (fullyReturned()) {
+        <div class="return-notice">
+          <i class="pi pi-info-circle"></i>
+          <span>Esta venta ya se devolvió por completo, no queda nada por devolver.</span>
+        </div>
+      }
+
+      <div class="table-scroll">
+        <table class="return-items-table">
+          <thead>
             <tr>
-              <td>
-                <span class="cart-product-name">{{ line.productName }}</span>
-                <span class="cart-product-sku">{{ line.productSku || '—' }}</span>
-              </td>
-              <td style="text-align: right">{{ line.maxQuantity | number: '1.0-4' }}</td>
-              <td>
-                <input
-                  type="number"
-                  class="cart-input"
-                  min="0"
-                  [max]="line.maxQuantity"
-                  step="any"
-                  [ngModel]="line.quantity"
-                  (ngModelChange)="onChangeLineQuantity(line.saleItemId, $event)"
-                />
-              </td>
+              <th>Producto</th>
+              <th style="text-align: right">Vendido</th>
+              <th style="text-align: right">Ya devuelto</th>
+              <th style="width: 100px">A devolver</th>
+              <th style="text-align: right">Reembolso</th>
             </tr>
-          }
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            @for (line of returnLines(); track line.saleItemId) {
+              <tr [class.line-exhausted]="line.maxQuantity === 0">
+                <td>
+                  <span class="cart-product-name">{{ line.productName }}</span>
+                  <span class="cart-product-sku">{{ line.productSku || '—' }}</span>
+                </td>
+                <td style="text-align: right">{{ line.soldQuantity | number: '1.0-4' }} <span class="unit-abbr">{{ line.unitAbbreviation }}</span></td>
+                <td style="text-align: right">{{ line.returnedQuantity ? (line.returnedQuantity | number: '1.0-4') : '—' }}</td>
+                <td>
+                  <input
+                    type="number"
+                    class="cart-input"
+                    min="0"
+                    [max]="line.maxQuantity"
+                    [step]="lineStep(line)"
+                    [disabled]="line.maxQuantity === 0"
+                    [attr.aria-label]="'Cantidad a devolver de ' + line.productName"
+                    [ngModel]="line.quantity"
+                    (ngModelChange)="onChangeLineQuantity(line.saleItemId, $event)"
+                  />
+                </td>
+                <td style="text-align: right">{{ refundPreview().lines.get(line.saleItemId)?.total | number: '1.2-2' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="detail-totals" aria-live="polite">
+        <div><span>Subtotal a reembolsar</span><span>{{ refundPreview().subtotal | number: '1.2-2' }}</span></div>
+        <div><span>Impuesto a reembolsar</span><span>{{ refundPreview().taxAmount | number: '1.2-2' }}</span></div>
+        <div class="grand-total"><span>Total a reembolsar</span><span>{{ refundPreview().total | number: '1.2-2' }}</span></div>
+      </div>
+      @if (returnForm.refundMethod === 'Cash' && refundPreview().total > 0) {
+        <p class="refund-cash-note">
+          <i class="pi pi-wallet"></i> Se descontará del efectivo esperado al cerrar tu turno.
+        </p>
+      }
 
       <div class="rm-row">
         <div class="rm-field">
@@ -101,7 +131,7 @@
   <div class="rm-footer">
     <button class="rm-btn-cancel" (click)="showNewModal = false">Cancelar</button>
     @if (foundSale()) {
-      <button class="rm-btn-save" (click)="onSaveReturn()" [disabled]="saving()">
+      <button class="rm-btn-save" (click)="onSaveReturn()" [disabled]="saving() || fullyReturned()">
         @if (saving()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
         Registrar devolución
       </button>

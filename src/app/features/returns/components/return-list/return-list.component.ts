@@ -5,6 +5,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { TableModule } from 'primeng/table';
 import { DialogModule } from 'primeng/dialog';
 import { Router } from '@angular/router';
+import { forkJoin } from 'rxjs';
 import { HasPermissionDirective } from '../../../../shared/directives/has-permission.directive';
 import { PagerComponent } from '../../../../shared/components/pager/pager.component';
 import { ReturnsService } from '../../services/returns.service';
@@ -13,6 +14,8 @@ import { CashSessionsService } from '../../../cash-sessions/services/cash-sessio
 import { CompaniesService } from '../../../companies/services/companies.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { NotificationService } from '../../../../core/services/notification.service';
+import { MAX_PAGE_SIZE, fetchAllPages } from '../../../../core/utils/fetch-all-pages.util';
+import { quantityDecimalsError, quantityStep } from '../../../../core/utils/quantity.util';
 import { ICashSession } from '../../../../core/models/cash-session.models';
 import { ICompany } from '../../../../core/models/company.models';
 import { ISale } from '../../../../core/models/sale.models';
@@ -28,8 +31,89 @@ interface IReturnLineForm {
   saleItemId: number;
   productName: string;
   productSku: string | null;
+  /** Unidad del producto vendido: decide si se pueden devolver fracciones */
+  unitAbbreviation: string;
+  unitDecimalPlaces: number;
+  soldQuantity: number;
+  /** Suma de devoluciones previas de esta línea */
+  returnedQuantity: number;
+  /** Lo que todavía se puede devolver: vendido − ya devuelto */
   maxQuantity: number;
   quantity: number;
+  /** Lo cobrado por la línea (sin IVA / IVA), tal como quedó en la venta */
+  saleSubtotal: number;
+  saleTaxAmount: number;
+  /** Lo ya reembolsado de la línea en devoluciones previas (sin IVA / IVA) */
+  returnedSubtotal: number;
+  returnedTaxAmount: number;
+}
+
+interface IRefundPreviewLine {
+  subtotal: number;
+  taxAmount: number;
+  total: number;
+}
+
+interface IRefundPreview {
+  lines: Map<number, IRefundPreviewLine>;
+  subtotal: number;
+  taxAmount: number;
+  total: number;
+}
+
+/** Redondeo a centavos "half away from zero", igual que `MoneyHelper.Round` del backend */
+function roundMoney(value: number): number {
+  return (Math.sign(value) * Math.round((Math.abs(value) + Number.EPSILON) * 100)) / 100;
+}
+
+/**
+ * Replica el cálculo de POST /api/Returns (ReturnsController) para mostrar el reembolso antes de
+ * guardar: si se devuelve todo lo que queda de la línea, se reembolsa exactamente lo que queda
+ * (así varias devoluciones parciales suman al centavo lo cobrado); si es parcial, la parte
+ * proporcional de lo cobrado, redondeada a centavos. Si el backend cambia la fórmula, cambiarla aquí.
+ */
+function refundForLine(line: IReturnLineForm): IRefundPreviewLine {
+  if (line.quantity <= 0) return { subtotal: 0, taxAmount: 0, total: 0 };
+  const isRemainder = line.quantity === line.maxQuantity;
+  const subtotal = isRemainder
+    ? roundMoney(line.saleSubtotal - line.returnedSubtotal)
+    : roundMoney((line.saleSubtotal * line.quantity) / line.soldQuantity);
+  const taxAmount = isRemainder
+    ? roundMoney(line.saleTaxAmount - line.returnedTaxAmount)
+    : roundMoney((line.saleTaxAmount * line.quantity) / line.soldQuantity);
+  return { subtotal, taxAmount, total: roundMoney(subtotal + taxAmount) };
+}
+
+function buildReturnLines(sale: ISale, previousReturns: IReturn[]): IReturnLineForm[] {
+  const returned = new Map<number, { quantity: number; subtotal: number; taxAmount: number }>();
+  for (const ret of previousReturns) {
+    for (const item of ret.items) {
+      const acc = returned.get(item.saleItemId) ?? { quantity: 0, subtotal: 0, taxAmount: 0 };
+      acc.quantity += item.quantity;
+      acc.subtotal += item.subtotal;
+      acc.taxAmount += item.taxAmount;
+      returned.set(item.saleItemId, acc);
+    }
+  }
+
+  return sale.items.map((item) => {
+    const prev = returned.get(item.id);
+    return {
+      saleItemId: item.id,
+      productName: item.productName,
+      productSku: item.productSku,
+      unitAbbreviation: item.unitAbbreviation,
+      unitDecimalPlaces: item.unitDecimalPlaces,
+      soldQuantity: item.quantity,
+      returnedQuantity: prev?.quantity ?? 0,
+      maxQuantity: Math.max(item.quantity - (prev?.quantity ?? 0), 0),
+      quantity: 0,
+      saleSubtotal: item.subtotal,
+      saleTaxAmount: item.taxAmount,
+      returnedSubtotal: roundMoney(prev?.subtotal ?? 0),
+      returnedTaxAmount: roundMoney(prev?.taxAmount ?? 0)
+    };
+  });
 }
 
 const REFUND_METHOD_LABELS: Record<RefundMethod, string> = {
@@ -198,19 +282,17 @@ export class ReturnListComponent implements OnInit {
       next: (result) => {
         const match = result.items.find((s) => s.folioNumber === folio);
         if (match) {
-          this.salesService.getById(match.id).subscribe({
-            next: (sale) => {
+          // Las devoluciones previas dan lo ya devuelto por línea: el tope real y el reembolso exacto
+          forkJoin({
+            sale: this.salesService.getById(match.id),
+            previousReturns: fetchAllPages((p) =>
+              this.returnsService.getAll({ saleId: match.id, page: p, pageSize: MAX_PAGE_SIZE })
+            )
+          }).subscribe({
+            next: ({ sale, previousReturns }) => {
               this.searchingSale.set(false);
               this.foundSale.set(sale);
-              this.returnLines.set(
-                sale.items.map((item) => ({
-                  saleItemId: item.id,
-                  productName: item.productName,
-                  productSku: item.productSku,
-                  maxQuantity: item.quantity,
-                  quantity: 0
-                }))
-              );
+              this.returnLines.set(buildReturnLines(sale, previousReturns));
             },
             error: (e) => { this.searchingSale.set(false); this.notify.httpError(e); }
           });
@@ -239,6 +321,29 @@ export class ReturnListComponent implements OnInit {
     );
   }
 
+  /** Vista previa del reembolso: se recalcula al cambiar cualquier cantidad */
+  readonly refundPreview = computed<IRefundPreview>(() => {
+    const lines = new Map<number, IRefundPreviewLine>();
+    let subtotal = 0;
+    let taxAmount = 0;
+    for (const line of this.returnLines()) {
+      const refund = refundForLine(line);
+      lines.set(line.saleItemId, refund);
+      subtotal += refund.subtotal;
+      taxAmount += refund.taxAmount;
+    }
+    subtotal = roundMoney(subtotal);
+    taxAmount = roundMoney(taxAmount);
+    return { lines, subtotal, taxAmount, total: roundMoney(subtotal + taxAmount) };
+  });
+
+  /** true si todas las líneas de la venta ya se devolvieron por completo */
+  readonly fullyReturned = computed(() => this.returnLines().length > 0 && this.returnLines().every((l) => l.maxQuantity === 0));
+
+  lineStep(line: IReturnLineForm): number {
+    return quantityStep(line.unitDecimalPlaces);
+  }
+
   onSearchAnotherSale(): void {
     this.foundSale.set(null);
     this.returnLines.set([]);
@@ -257,6 +362,13 @@ export class ReturnListComponent implements OnInit {
     if (items.length === 0) {
       this.notify.warn('Indica la cantidad a devolver de al menos un producto');
       return;
+    }
+    for (const line of this.returnLines().filter((l) => l.quantity > 0)) {
+      const decimalsError = quantityDecimalsError(line.quantity, line.unitDecimalPlaces, line.productName);
+      if (decimalsError) {
+        this.notify.warn(decimalsError);
+        return;
+      }
     }
 
     const request: IReturnRequest = {

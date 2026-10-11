@@ -26,8 +26,13 @@ export class NotificationService {
     this.messageService.add({ severity: 'info', summary, detail, life: 3000, key: 'global' });
   }
 
+  /**
+   * Muestra el mensaje de un error HTTP. Entiende los dos formatos del backend: `{ message }` y el de
+   * validación de modelo de ASP.NET (`{ errors: { campo: [mensaje, ...] } }`), del que toma el primero.
+   */
   httpError(err: unknown, fallback = 'Ocurrió un error'): void {
-    const detail = (err as { error?: { message?: string } })?.error?.message ?? fallback;
-    this.error(detail);
+    const body = (err as { error?: { message?: string; errors?: Record<string, string[]> } })?.error;
+    const validationMessage = body?.errors ? Object.values(body.errors).flat()[0] : undefined;
+    this.error(body?.message ?? validationMessage ?? fallback);
   }
 }

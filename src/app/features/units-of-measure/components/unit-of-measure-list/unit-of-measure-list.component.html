@@ -1,0 +1,112 @@
+<p-confirmDialog />
+
+<div class="page-header">
+  <div class="header-left">
+    <i class="pi pi-sliders-h header-icon"></i>
+    <div>
+      <h2>Unidades de medida</h2>
+      <span class="subtitle">Catálogo global: definen si un producto se maneja en enteros o con decimales</span>
+    </div>
+  </div>
+  @if (authService.isSystemAdmin()) {
+    <button class="btn-primary" (click)="onCreate()"><i class="pi pi-plus"></i> Nueva unidad</button>
+  }
+</div>
+
+<!-- MODAL: Crear/Editar unidad -->
+<p-dialog [(visible)]="showModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '440px' }" [breakpoints]="{ '576px': '95vw' }" [showHeader]="false" [contentStyle]="{ padding: '0' }"
+  styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi" [class.pi-plus-circle]="!isEdit()" [class.pi-pencil]="isEdit()"></i> {{ isEdit() ? 'Editar unidad' : 'Nueva unidad' }}</div>
+    <button class="rm-close" (click)="showModal = false" aria-label="Cerrar"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    <div class="rm-row">
+      <div class="rm-field">
+        <label for="unit-name">Nombre *</label>
+        <input id="unit-name" type="text" [(ngModel)]="form.name" maxlength="50" placeholder="ej: Kilogramo" />
+      </div>
+      <div class="rm-field">
+        <label for="unit-abbr">Abreviatura *</label>
+        <input id="unit-abbr" type="text" [(ngModel)]="form.abbreviation" maxlength="10" placeholder="ej: kg" />
+      </div>
+    </div>
+    <div class="rm-field-single">
+      <label for="unit-decimals">Cantidades permitidas *</label>
+      <select id="unit-decimals" [(ngModel)]="form.decimalPlaces">
+        @for (option of decimalOptions; track option.value) {
+          <option [ngValue]="option.value" [disabled]="isDecimalOptionDisabled(option.value)">{{ option.label }}</option>
+        }
+      </select>
+      @if (isEdit() && editInUse) {
+        <span class="field-hint">Ya la usan productos: se le pueden agregar decimales, pero no quitar.</span>
+      } @else {
+        <span class="field-hint">Pieza: solo enteros · Metro: 2 decimales (centímetros) · Kilogramo: 3 decimales (gramos).</span>
+      }
+    </div>
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showModal = false">Cancelar</button>
+    <button class="rm-btn-save" (click)="onSave()" [disabled]="saving()">
+      @if (saving()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+      {{ isEdit() ? 'Actualizar' : 'Crear' }}
+    </button>
+  </div>
+</p-dialog>
+
+<div class="table-card">
+  <div class="table-toolbar">
+    <div class="search-box">
+      <i class="pi pi-search"></i>
+      <input type="text" placeholder="Buscar unidad..." aria-label="Buscar unidad"
+        (input)="dt.filterGlobal($any($event.target).value, 'contains')" />
+    </div>
+    <span class="item-count">{{ units().length }} unidad(es)</span>
+  </div>
+
+  <div class="table-scroll">
+    <p-table #dt [value]="units()" [loading]="loading()" [rowHover]="true"
+      [globalFilterFields]="['name', 'abbreviation']" styleClass="p-datatable-sm">
+      <ng-template pTemplate="header">
+        <tr>
+          <th pSortableColumn="name">Unidad <p-sortIcon field="name" /></th>
+          <th>Abreviatura</th>
+          <th>Cantidades</th>
+          <th style="text-align: right">Productos</th>
+          <th>Estado</th>
+          @if (authService.isSystemAdmin()) { <th style="text-align: center; width: 12%">Acciones</th> }
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-unit>
+        <tr [class.inactive-row]="!unit.isActive">
+          <td><span class="unit-name">{{ unit.name }}</span></td>
+          <td><code>{{ unit.abbreviation }}</code></td>
+          <td>
+            <span class="decimals-badge" [class.integer]="unit.decimalPlaces === 0">{{ decimalsLabel(unit.decimalPlaces) }}</span>
+          </td>
+          <td style="text-align: right">{{ unit.productCount }}</td>
+          <td>
+            @if (unit.isActive) { <span class="status-badge active">Activa</span> }
+            @else { <span class="status-badge">Inactiva</span> }
+          </td>
+          @if (authService.isSystemAdmin()) {
+            <td>
+              <div class="actions-cell">
+                <button class="action-btn edit" (click)="onEdit(unit)" title="Editar" [attr.aria-label]="'Editar ' + unit.name"><i class="pi pi-pencil"></i></button>
+                @if (unit.isActive) {
+                  <button class="action-btn delete" (click)="onDeactivate(unit)" title="Desactivar" [attr.aria-label]="'Desactivar ' + unit.name"><i class="pi pi-trash"></i></button>
+                } @else {
+                  <button class="action-btn activate" (click)="onActivate(unit)" title="Activar" [attr.aria-label]="'Activar ' + unit.name"><i class="pi pi-refresh"></i></button>
+                }
+              </div>
+            </td>
+          }
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="emptymessage">
+        <tr><td [attr.colspan]="authService.isSystemAdmin() ? 6 : 5"><div class="empty-state"><i class="pi pi-sliders-h"></i><p>No hay unidades de medida</p></div></td></tr>
+      </ng-template>
+    </p-table>
+  </div>
+</div>

@@ -1,0 +1,70 @@
+<div class="table-card">
+  <div class="table-toolbar">
+    <div class="toolbar-title">
+      <i class="pi pi-th-large"></i>
+      <span>Combos</span>
+    </div>
+    <span class="item-hint">Se calculan con el stock de sus componentes — no llevan stock propio</span>
+  </div>
+
+  <div class="table-scroll">
+    <p-table [value]="combos()" [loading]="loading()" [rowHover]="true" styleClass="p-datatable-sm">
+      <ng-template pTemplate="header">
+        <tr>
+          <th>Combo</th>
+          @if (showWarehouse()) { <th>Almacén</th> }
+          <th style="text-align: right">Disponibles</th>
+          <th>Componentes</th>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-combo>
+        <tr>
+          <td>
+            <span class="product-name">{{ combo.comboProductName }}</span>
+            <span class="product-sku">{{ combo.comboProductSku || '—' }}</span>
+          </td>
+          @if (showWarehouse()) { <td>{{ combo.warehouseName }}</td> }
+          <td style="text-align: right">
+            @if (combo.availableQuantity > 0) {
+              <span class="available">{{ combo.availableQuantity | number: '1.0-4' }}</span>
+            } @else {
+              <span class="unavailable-badge">Sin disponibilidad</span>
+            }
+          </td>
+          <td>
+            @if (combo.components.length === 0) {
+              <span class="no-components">Sin componentes asignados</span>
+            } @else {
+              <ul class="component-list">
+                @for (component of combo.components; track component.componentProductId) {
+                  <li [class.limiting]="component.isLimiting" [class.inactive]="!component.isActive">
+                    <span class="component-name">
+                      {{ component.quantityPerCombo | number: '1.0-4' }} × {{ component.componentProductName }}
+                    </span>
+                    <span class="component-stock">
+                      @if (!component.isActive) {
+                        inactivo
+                      } @else {
+                        stock {{ component.stock | number: '1.0-4' }}
+                      }
+                    </span>
+                    @if (component.isLimiting) {
+                      <span class="limiting-tag" title="Este componente limita cuántos combos se pueden vender">limita</span>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="emptymessage">
+        <tr>
+          <td [attr.colspan]="showWarehouse() ? 4 : 3">
+            <div class="empty-state"><i class="pi pi-th-large"></i><p>No hay combos activos</p></div>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </div>
+</div>

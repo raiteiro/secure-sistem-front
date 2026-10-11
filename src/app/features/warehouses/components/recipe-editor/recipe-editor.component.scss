@@ -1,0 +1,44 @@
+.table-scroll { overflow-x: auto; }
+
+.recipe-table {
+  width: 100%; border-collapse: collapse; font-size: 0.8125rem; margin-bottom: 0.75rem;
+  th { text-align: left; padding: 0.5rem 0.625rem; background: #f8f9fc; color: #4a4a5a; font-weight: 600; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #e8eaf0; }
+  td { padding: 0.5rem 0.625rem; border-bottom: 1px solid #f3f4f6; color: #374151; }
+  .empty-row { text-align: center; color: #9ca3af; padding: 1rem; }
+}
+
+.qty-with-unit { display: flex; align-items: center; gap: 0.375rem; }
+.unit { font-size: 0.75rem; color: #8c8c9e; white-space: nowrap; }
+
+.cell-input {
+  width: 100%; min-width: 64px; padding: 0.4rem 0.5rem; border: 2px solid #e5e7eb; border-radius: 8px;
+  font-size: 0.8125rem; background: #f9fafb; outline: none;
+  &:focus { border-color: var(--brand-button); background: #fff; }
+}
+
+.remove-btn {
+  display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px;
+  border: none; border-radius: 8px; background: transparent; color: #dc2626; cursor: pointer;
+  &:hover { background: rgba(220, 38, 38, 0.1); }
+}
+
+.add-row {
+  display: grid; grid-template-columns: 1fr; gap: 0.5rem;
+  select, input {
+    width: 100%; padding: 0.6rem 0.75rem; border: 2px solid #e5e7eb; border-radius: 10px;
+    font-size: 0.8125rem; background: #f9fafb; color: #1a1a2e; outline: none;
+    &:focus { border-color: var(--brand-button); background: #fff; box-shadow: 0 0 0 3px rgba(var(--brand-button-rgb), 0.12); }
+  }
+}
+.add-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem;
+  padding: 0.6rem 0.875rem; border: 2px solid var(--brand-button); border-radius: 10px;
+  background: #fff; color: var(--brand-button); font-size: 0.8125rem; font-weight: 600; cursor: pointer;
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.hint { margin: 0.5rem 0 0; font-size: 0.75rem; color: #8c8c9e; }
+
+@media (min-width: 576px) {
+  .add-row { grid-template-columns: 1fr 90px auto; }
+}

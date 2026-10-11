@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import {
@@ -9,14 +9,25 @@ import {
   IReassignCompanyRequest,
   IResetUserPasswordResponse
 } from '../../../core/models/user.models';
+import { IPageFilters, IPagedResult } from '../../../core/models/pagination.models';
+import { MAX_PAGE_SIZE, fetchAllPages } from '../../../core/utils/fetch-all-pages.util';
 
 @Injectable({ providedIn: 'root' })
 export class UsersService {
   private readonly http = inject(HttpClient);
   private readonly apiUrl = `${environment.apiUrl}/Users`;
 
+  /** Usuarios activos, una página — ver `IPagedResult` (el backend usa 25 por defecto, máximo 100) */
+  getPage(filters?: IPageFilters): Observable<IPagedResult<IUser>> {
+    let params = new HttpParams();
+    if (filters?.page) params = params.set('page', filters.page);
+    if (filters?.pageSize) params = params.set('pageSize', filters.pageSize);
+    return this.http.get<IPagedResult<IUser>>(this.apiUrl, { params });
+  }
+
+  /** Todos los usuarios activos, recorriendo todas las páginas */
   getAll(): Observable<IUser[]> {
-    return this.http.get<IUser[]>(this.apiUrl);
+    return fetchAllPages((page) => this.getPage({ page, pageSize: MAX_PAGE_SIZE }));
   }
 
   getById(id: number): Observable<IUser> {

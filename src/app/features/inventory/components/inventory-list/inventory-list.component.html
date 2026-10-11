@@ -116,5 +116,11 @@
         </ng-template>
       </p-table>
     </div>
+
+    @if (loadingCombos() || group.combos.length > 0) {
+      <div class="combos-section">
+        <app-combo-availability-table [combos]="group.combos" [loading]="loadingCombos()" [showWarehouse]="true" />
+      </div>
+    }
   </div>
 }

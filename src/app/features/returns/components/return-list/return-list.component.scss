@@ -99,8 +99,21 @@
   .grand-total { font-weight: 700; font-size: 1rem; color: #1a1a2e; padding-top: 0.5rem; }
 }
 
+// ===== Vista previa del reembolso (modal nueva devolución) =====
+.return-items-table .line-exhausted td { color: #b0b0c0; }
+.return-notice {
+  display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; padding: 0.625rem 0.875rem;
+  border-radius: 10px; background: #eff6ff; color: #3b82f6; font-size: 0.8125rem;
+}
+.refund-cash-note {
+  display: flex; align-items: center; gap: 0.375rem; margin: 0.5rem 0 1rem;
+  font-size: 0.75rem; color: #8c8c9e;
+}
+.detail-totals + .rm-row { margin-top: 1rem; }
+
 @media (max-width: 768px) {
   .page-header { flex-direction: column; align-items: flex-start; }
   .sale-summary { flex-wrap: wrap; }
   .sale-summary-total { margin-left: 0; }
 }
+.unit-abbr { font-size: 0.75rem; color: #8c8c9e; }

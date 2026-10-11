@@ -16,21 +16,59 @@
         </span>
       </div>
     </div>
-    <button class="btn-primary" *appHasPermission="'WAREHOUSES.ADD_PRODUCT'" (click)="onAddProduct()"><i class="pi pi-plus"></i> Agregar producto</button>
+    <div class="header-actions">
+      <button class="btn-secondary" *appHasPermission="'WAREHOUSES.PRODUCE'" (click)="showProduceDialog.set(true)">
+        <i class="pi pi-cog"></i> Crear producto
+      </button>
+      @if (activeTab() !== 'production') {
+        <button class="btn-primary" *appHasPermission="'WAREHOUSES.ADD_PRODUCT'" (click)="onAddProduct()">
+          <i class="pi pi-plus"></i> {{ activeTab() === 'supplies' ? 'Agregar insumo' : 'Agregar producto' }}
+        </button>
+      }
+    </div>
   </div>
 
-  <!-- MODAL: Agregar producto (alta con entrada inicial) -->
+  <div class="tabs" role="tablist" aria-label="Contenido del almacén">
+    <button type="button" role="tab" [class.active]="activeTab() === 'products'" [attr.aria-selected]="activeTab() === 'products'" (click)="selectTab('products')">
+      <i class="pi pi-box"></i> Productos <span class="tab-count">{{ productCount() }}</span>
+    </button>
+    <button type="button" role="tab" [class.active]="activeTab() === 'supplies'" [attr.aria-selected]="activeTab() === 'supplies'" (click)="selectTab('supplies')">
+      <i class="pi pi-inbox"></i> Insumos <span class="tab-count">{{ supplyCount() }}</span>
+    </button>
+    <button type="button" role="tab" [class.active]="activeTab() === 'production'" [attr.aria-selected]="activeTab() === 'production'" (click)="selectTab('production')">
+      <i class="pi pi-cog"></i> Producción
+    </button>
+  </div>
+
+  <!-- MODAL: Crear producto (fabricar con insumos) -->
+  @if (showProduceDialog()) {
+    <app-produce-dialog
+      [warehouseId]="warehouseId"
+      [companyId]="wh.companyId"
+      [supplies]="companySupplies()"
+      [supplyStock]="supplyStock()"
+      (closed)="showProduceDialog.set(false)"
+      (changed)="onProductionChanged()"
+    />
+  }
+
+  <!-- MODAL: Separar un fabricado en sus insumos -->
+  @if (disassembleItem(); as item) {
+    <app-disassemble-dialog [item]="item" (closed)="disassembleItem.set(null)" (changed)="onProductionChanged()" />
+  }
+
+  <!-- MODAL: Agregar producto o insumo (alta con entrada inicial) -->
   <p-dialog [(visible)]="showAddModal" [modal]="true" [draggable]="false" [resizable]="false"
     [style]="{ width: '420px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
     <div class="rm-header">
-      <div class="rm-title"><i class="pi pi-plus-circle"></i> Agregar producto al almacén</div>
+      <div class="rm-title"><i class="pi pi-plus-circle"></i> {{ activeTab() === 'supplies' ? 'Agregar insumo al almacén' : 'Agregar producto al almacén' }}</div>
       <button class="rm-close" (click)="showAddModal = false"><i class="pi pi-times"></i></button>
     </div>
     <div class="rm-body">
       <div class="rm-field-single">
-        <label>Producto *</label>
+        <label>{{ activeTab() === 'supplies' ? 'Insumo' : 'Producto' }} *</label>
         <select [(ngModel)]="addForm.productId">
-          <option [ngValue]="null">Selecciona un producto</option>
+          <option [ngValue]="null">{{ activeTab() === 'supplies' ? 'Selecciona un insumo' : 'Selecciona un producto' }}</option>
           @for (product of availableProductsToAdd(); track product.id) {
             <option [ngValue]="product.id">{{ product.name }}{{ product.sku ? ' (' + product.sku + ')' : '' }}</option>
           }
@@ -38,7 +76,7 @@
       </div>
       <div class="rm-field-single">
         <label>Cantidad inicial *</label>
-        <input type="number" [(ngModel)]="addForm.quantity" min="0" step="any" placeholder="ej: 100" />
+        <input type="number" [(ngModel)]="addForm.quantity" min="0" [step]="addStep()" placeholder="ej: 100" />
       </div>
       <div class="rm-field-single">
         <label>Notas</label>
@@ -75,7 +113,7 @@
       @if (minStockForm.hasMinStock) {
         <div class="rm-field-single">
           <label>Cantidad mínima</label>
-          <input type="number" [(ngModel)]="minStockForm.minStock" min="0" step="any" placeholder="ej: 10" />
+          <input type="number" [(ngModel)]="minStockForm.minStock" min="0" [step]="itemStep(minStockItem)" placeholder="ej: 10" />
         </div>
       }
     </div>
@@ -98,7 +136,7 @@
     <div class="rm-body">
       @if (movementItem) {
         <p class="modal-item-label">{{ movementItem.productName }}</p>
-        <p class="modal-item-sublabel">Existencia actual: {{ movementItem.quantity | number: '1.0-4' }}</p>
+        <p class="modal-item-sublabel">Existencia actual: {{ movementItem.quantity | number: '1.0-4' }} {{ movementItem.unitAbbreviation }}</p>
       }
       <div class="rm-field-single">
         <label>Tipo de movimiento</label>
@@ -134,7 +172,7 @@
       }
       <div class="rm-field-single">
         <label>Cantidad</label>
-        <input type="number" [(ngModel)]="movementForm.quantity" min="0" step="any" placeholder="ej: 100" />
+        <input type="number" [(ngModel)]="movementForm.quantity" min="0" [step]="itemStep(movementItem)" placeholder="ej: 100" />
       </div>
       <div class="rm-field-single">
         <label>Notas</label>
@@ -199,24 +237,27 @@
     </div>
   </p-dialog>
 
+  @if (activeTab() === 'production') {
+    <app-production-history [warehouseId]="warehouseId" [refreshKey]="productionRefreshKey()" />
+  } @else {
   <div class="table-card">
     <div class="table-toolbar">
       <div class="search-box">
         <i class="pi pi-search"></i>
         <input
           type="text"
-          placeholder="Buscar por producto, SKU..."
+          [placeholder]="activeTab() === 'supplies' ? 'Buscar insumo, SKU...' : 'Buscar por producto, SKU...'"
           (input)="dt.filterGlobal($any($event.target).value, 'contains')"
         />
       </div>
-      <span class="item-count">{{ items().length }} producto(s)</span>
+      <span class="item-count">{{ visibleItems().length }} {{ activeTab() === 'supplies' ? 'insumo(s)' : 'producto(s)' }}</span>
     </div>
 
-    <p-table #dt [value]="items()" [loading]="loadingItems()" [rowHover]="true"
+    <p-table #dt [value]="visibleItems()" [loading]="loadingItems()" [rowHover]="true"
       [globalFilterFields]="['productName', 'productSku']" styleClass="p-datatable-sm">
       <ng-template pTemplate="header">
         <tr>
-          <th pSortableColumn="productName">Producto <p-sortIcon field="productName" /></th>
+          <th pSortableColumn="productName">{{ activeTab() === 'supplies' ? 'Insumo' : 'Producto' }} <p-sortIcon field="productName" /></th>
           <th style="text-align: right">Cantidad</th>
           <th style="text-align: right">Mínimo</th>
           <th>Estado</th>
@@ -226,10 +267,13 @@
       <ng-template pTemplate="body" let-item>
         <tr>
           <td>
-            <span class="product-name">{{ item.productName }}</span>
+            <span class="product-name">
+              {{ item.productName }}
+              @if (item.isManufactured) { <span class="manufactured-badge" title="Se fabrica con insumos">Fabricado</span> }
+            </span>
             <span class="product-sku">{{ item.productSku }}</span>
           </td>
-          <td style="text-align: right">{{ item.quantity | number: '1.0-4' }}</td>
+          <td style="text-align: right">{{ item.quantity | number: '1.0-4' }} <span class="unit-abbr">{{ item.unitAbbreviation }}</span></td>
           <td style="text-align: right">{{ item.minStock === null ? '—' : (item.minStock | number: '1.0-4') }}</td>
           <td>
             @if (item.isLowStock) {
@@ -242,15 +286,34 @@
             <div class="actions-cell">
               <button class="action-btn min-stock" *appHasPermission="'WAREHOUSES.EDIT_MIN_STOCK'" (click)="onEditMinStock(item)" title="Editar stock mínimo"><i class="pi pi-bell"></i></button>
               <button class="action-btn movement" *appHasPermission="'WAREHOUSES.REGISTER_MOVEMENT'" (click)="onRegisterMovement(item)" title="Registrar movimiento"><i class="pi pi-arrow-right-arrow-left"></i></button>
+              @if (item.isManufactured) {
+                <button class="action-btn disassemble" *appHasPermission="'WAREHOUSES.DISASSEMBLE'"
+                  (click)="disassembleItem.set(item)" title="Separar en insumos" [disabled]="item.quantity <= 0">
+                  <i class="pi pi-sitemap"></i>
+                </button>
+              }
               <button class="action-btn history" (click)="onViewHistory(item)" title="Ver historial"><i class="pi pi-history"></i></button>
             </div>
           </td>
         </tr>
       </ng-template>
       <ng-template pTemplate="emptymessage">
-        <tr><td colspan="5"><div class="empty-state"><i class="pi pi-box"></i><p>Este almacén todavía no tiene productos — usa "Agregar producto" para dar de alta el primero</p></div></td></tr>
+        <tr><td colspan="5"><div class="empty-state">
+          @if (activeTab() === 'supplies') {
+            <i class="pi pi-inbox"></i><p>Este almacén todavía no tiene insumos — usa "Agregar insumo" para dar de alta el primero</p>
+          } @else {
+            <i class="pi pi-box"></i><p>Este almacén todavía no tiene productos — usa "Agregar producto" o "Crear producto"</p>
+          }
+        </div></td></tr>
       </ng-template>
     </p-table>
   </div>
+
+  @if (activeTab() === 'products' && (loadingCombos() || combos().length > 0)) {
+    <div class="combos-section">
+      <app-combo-availability-table [combos]="combos()" [loading]="loadingCombos()" />
+    </div>
+  }
+  }
 }
 }

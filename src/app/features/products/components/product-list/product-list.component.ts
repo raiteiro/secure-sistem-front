@@ -17,25 +17,30 @@ import {
   IAssignComboItemsRequest,
   IComboItem,
   IProduct,
-  IProductRequest
+  IProductRequest,
+  ProductKind
 } from '../../../../core/models/product.models';
 import { ICategory } from '../../../../core/models/category.models';
 import { ITaxRate } from '../../../../core/models/tax-rate.models';
 import { ICompany } from '../../../../core/models/company.models';
 import { ISupplier } from '../../../../core/models/supplier.models';
 import { NotificationService } from '../../../../core/services/notification.service';
+import { UnitsOfMeasureService } from '../../../units-of-measure/services/units-of-measure.service';
+import { IUnitOfMeasure } from '../../../../core/models/unit-of-measure.models';
+import { quantityDecimalsError, quantityStep } from '../../../../core/utils/quantity.util';
 
 interface IProductForm {
   sku: string;
   name: string;
   description: string;
-  unit: string;
+  unitId: number | null;
   price: number | null;
   cost: number | null;
   categoryId: number | null;
   taxRateId: number | null;
   /** Solo se usa al crear, y solo si el que llama es admin de sistema */
   companyId: number | null;
+  kind: ProductKind;
   isCombo: boolean;
   supplierId: number | null;
   commissionType: CommissionType;
@@ -46,12 +51,13 @@ const EMPTY_FORM: IProductForm = {
   sku: '',
   name: '',
   description: '',
-  unit: '',
+  unitId: null,
   price: null,
   cost: null,
   categoryId: null,
   taxRateId: null,
   companyId: null,
+  kind: 'Product',
   isCombo: false,
   supplierId: null,
   commissionType: 'Percentage',
@@ -88,16 +94,21 @@ export class ProductListComponent implements OnInit {
   private readonly taxRatesService = inject(TaxRatesService);
   private readonly companiesService = inject(CompaniesService);
   private readonly suppliersService = inject(SuppliersService);
+  private readonly unitsService = inject(UnitsOfMeasureService);
   private readonly confirmService = inject(ConfirmationService);
   private readonly notify = inject(NotificationService);
   readonly authService = inject(AuthService);
 
   products = signal<IProduct[]>([]);
   loading = signal(true);
+  /** Filtro de la tabla por tipo; null = todos */
+  kindFilter = signal<ProductKind | null>(null);
   companies = signal<ICompany[]>([]);
   allCategories = signal<ICategory[]>([]);
   allTaxRates = signal<ITaxRate[]>([]);
   allSuppliers = signal<ISupplier[]>([]);
+  /** Unidades activas del catálogo global */
+  units = signal<IUnitOfMeasure[]>([]);
 
   showModal = false;
   isEdit = signal(false);
@@ -105,6 +116,8 @@ export class ProductListComponent implements OnInit {
   editId = 0;
   /** Empresa del producto que se está editando (para filtrar los selects de categoría/impuesto) */
   editCompanyId: number | null = null;
+  /** El producto en edición es fabricado: su tipo queda fijo en "Producto" y no puede ser combo */
+  editIsManufactured = false;
   form: IProductForm = { ...EMPTY_FORM };
 
   // Imagen (solo disponible editando, requiere un id existente)
@@ -130,6 +143,10 @@ export class ProductListComponent implements OnInit {
     this.taxRatesService.getAll().subscribe({
       next: (data) => this.allTaxRates.set(data),
       error: () => this.notify.error('No se pudieron cargar los impuestos')
+    });
+    this.unitsService.getAll().subscribe({
+      next: (data) => this.units.set(data),
+      error: () => this.notify.error('No se pudieron cargar las unidades de medida')
     });
     this.suppliersService.getAll().subscribe({
       next: (data) => this.allSuppliers.set(data),
@@ -163,7 +180,8 @@ export class ProductListComponent implements OnInit {
 
   /** Separa la tabla por empresa cuando quien mira es admin de sistema; para el resto es un único grupo */
   readonly productGroups = computed<IProductGroup[]>(() => {
-    const products = this.products();
+    const kind = this.kindFilter();
+    const products = kind ? this.products().filter((p) => p.kind === kind) : this.products();
     if (!this.authService.isSystemAdmin()) {
       return [{ companyId: 0, companyName: '', products }];
     }
@@ -209,9 +227,11 @@ export class ProductListComponent implements OnInit {
     return this.allTaxRates().filter((t) => t.companyId === target);
   }
 
+  /** Un insumo no puede tener proveedor consignador: la comisión se genera al vender, y un insumo no se vende */
   availableSuppliers(): ISupplier[] {
     const target = this.targetCompanyId();
-    const active = this.allSuppliers().filter((s) => s.isActive);
+    const isSupply = this.form.kind === 'Supply';
+    const active = this.allSuppliers().filter((s) => s.isActive && !(isSupply && s.isConsignor));
     if (!target) return active;
     return active.filter((s) => s.companyId === target);
   }
@@ -226,6 +246,16 @@ export class ProductListComponent implements OnInit {
     this.form.categoryId = null;
     this.form.taxRateId = null;
     this.form.supplierId = null;
+  }
+
+  /** Al pasar a insumo se quitan las opciones que un insumo no admite (combo, proveedor consignador) */
+  onKindChange(): void {
+    if (this.form.kind !== 'Supply') return;
+    this.form.isCombo = false;
+    if (this.form.supplierId && !this.availableSuppliers().some((s) => s.id === this.form.supplierId)) {
+      this.form.supplierId = null;
+      this.onSupplierChange();
+    }
   }
 
   onSupplierChange(): void {
@@ -254,6 +284,7 @@ export class ProductListComponent implements OnInit {
       p.companyId === this.comboProductCompanyId &&
       p.id !== this.comboProductId &&
       !p.isCombo &&
+      p.kind !== 'Supply' &&
       !usedIds.has(p.id)
     );
   });
@@ -265,6 +296,7 @@ export class ProductListComponent implements OnInit {
     this.isEdit.set(false);
     this.editId = 0;
     this.editCompanyId = null;
+    this.editIsManufactured = false;
     this.imageUrl.set(null);
     this.showModal = true;
   }
@@ -273,16 +305,18 @@ export class ProductListComponent implements OnInit {
     this.isEdit.set(true);
     this.editId = product.id;
     this.editCompanyId = product.companyId;
+    this.editIsManufactured = product.isManufactured;
     this.form = {
       sku: product.sku ?? '',
       name: product.name,
       description: product.description ?? '',
-      unit: product.unit ?? '',
+      unitId: product.unitId,
       price: product.price,
       cost: product.cost,
       categoryId: product.categoryId,
       taxRateId: product.taxRateId,
       companyId: null,
+      kind: product.kind,
       isCombo: product.isCombo,
       supplierId: product.supplierId,
       commissionType: product.commissionType ?? 'Percentage',
@@ -324,8 +358,18 @@ export class ProductListComponent implements OnInit {
       this.notify.warn('El nombre es obligatorio');
       return;
     }
-    if (this.form.price === null || this.form.price < 0) {
+    if (!this.form.unitId) {
+      this.notify.warn('Selecciona la unidad de medida');
+      return;
+    }
+    const isSupply = this.form.kind === 'Supply';
+    // Un insumo no se vende: el precio es opcional (se manda 0)
+    if (!isSupply && (this.form.price === null || this.form.price < 0)) {
       this.notify.warn('Ingresa un precio válido');
+      return;
+    }
+    if (isSupply && this.form.price !== null && this.form.price < 0) {
+      this.notify.warn('El precio no puede ser negativo');
       return;
     }
     const isConsignor = this.selectedSupplierIsConsignor();
@@ -342,12 +386,13 @@ export class ProductListComponent implements OnInit {
       sku: this.form.sku || null,
       name: this.form.name,
       description: this.form.description || null,
-      unit: this.form.unit || null,
-      price: this.form.price,
+      unitId: this.form.unitId,
+      price: this.form.price ?? 0,
       cost: this.resolvedCost(),
       categoryId: this.form.categoryId,
       taxRateId: this.form.taxRateId,
-      isCombo: this.form.isCombo,
+      isCombo: isSupply ? false : this.form.isCombo,
+      kind: this.form.kind,
       supplierId: this.form.supplierId,
       commissionType: isConsignor ? this.form.commissionType : null,
       commissionValue: isConsignor ? this.form.commissionValue : null,
@@ -363,7 +408,8 @@ export class ProductListComponent implements OnInit {
       next: () => {
         this.saving.set(false);
         this.showModal = false;
-        this.notify.success(this.isEdit() ? 'Producto actualizado' : 'Producto creado');
+        const noun = isSupply ? 'Insumo' : 'Producto';
+        this.notify.success(this.isEdit() ? `${noun} actualizado` : `${noun} creado`);
         this.loadProducts();
       },
       error: (e) => { this.saving.set(false); this.notify.httpError(e); }
@@ -408,6 +454,38 @@ export class ProductListComponent implements OnInit {
     });
   }
 
+  /**
+   * Unidades elegibles en el formulario: las activas, más la actual del producto en edición aunque
+   * se haya desactivado (conserva su unidad; solo no se puede elegir para productos nuevos).
+   */
+  availableUnits(): IUnitOfMeasure[] {
+    const active = this.units();
+    if (!this.isEdit() || !this.form.unitId || active.some((u) => u.id === this.form.unitId)) return active;
+    const current = this.products().find((p) => p.id === this.editId);
+    if (!current) return active;
+    return [
+      ...active,
+      {
+        id: current.unitId,
+        name: `${current.unitName} (inactiva)`,
+        abbreviation: current.unitAbbreviation,
+        decimalPlaces: current.unitDecimalPlaces,
+        isActive: false,
+        productCount: 0,
+        createdAt: '',
+        createdBy: '',
+        modifiedAt: null,
+        modifiedBy: null
+      }
+    ];
+  }
+
+  /** `step` del input de cantidad del modal de combo, según la unidad del componente elegido */
+  comboAddStep(): number {
+    const component = this.products().find((p) => p.id === this.comboAddProductId);
+    return quantityStep(component?.unitDecimalPlaces);
+  }
+
   onAddComboItem(): void {
     if (!this.comboAddProductId) {
       this.notify.warn('Selecciona un producto');
@@ -420,6 +498,12 @@ export class ProductListComponent implements OnInit {
 
     const component = this.products().find((p) => p.id === this.comboAddProductId);
     if (!component) return;
+    // La cantidad por combo respeta la unidad del componente (no hay "media pieza")
+    const decimalsError = quantityDecimalsError(this.comboAddQuantity, component.unitDecimalPlaces, component.name, component.unitName);
+    if (decimalsError) {
+      this.notify.warn(decimalsError);
+      return;
+    }
 
     this.comboItems.update((items) => [
       ...items,

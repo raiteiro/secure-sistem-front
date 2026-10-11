@@ -37,10 +37,17 @@ export interface ISaleItem {
   productName: string;
   productSku: string | null;
   quantity: number;
+  /** Unidad del producto: decide qué cantidades se pueden devolver */
+  unitAbbreviation: string;
+  unitDecimalPlaces: number;
   unitPrice: number;
   discountAmount: number;
+  taxRateValue: number;
+  /** Cantidad × precio − descuento, sin IVA, ya redondeado a centavos */
+  subtotal: number;
   taxAmount: number;
-  lineTotal: number;
+  /** subtotal + taxAmount — lo que se cobró por la línea */
+  total: number;
 }
 
 export interface ISalePayment {

@@ -1,0 +1,222 @@
+<p-dialog [visible]="true" (visibleChange)="!$event && onClose()" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '720px' }" [breakpoints]="{ '768px': '95vw' }" [showHeader]="false" [contentStyle]="{ padding: '0' }"
+  styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi pi-cog"></i> Crear producto</div>
+    <button class="rm-close" (click)="onClose()" aria-label="Cerrar"><i class="pi pi-times"></i></button>
+  </div>
+
+  <div class="rm-body">
+    <div class="mode-switch" role="tablist" aria-label="Qué producto crear">
+      <button type="button" role="tab" [class.active]="mode() === 'existing'" [attr.aria-selected]="mode() === 'existing'"
+        (click)="onSelectMode('existing')">
+        <i class="pi pi-list"></i> Fabricado existente
+      </button>
+      <button type="button" role="tab" *appHasPermission="'WAREHOUSES.CREATE_MANUFACTURED'"
+        [class.active]="mode() === 'new'" [attr.aria-selected]="mode() === 'new'" (click)="onSelectMode('new')">
+        <i class="pi pi-plus"></i> Producto nuevo
+      </button>
+    </div>
+
+    <!-- ===== Fabricado existente ===== -->
+    @if (mode() === 'existing') {
+      @if (loadingAvailability()) {
+        <div class="loading-state"><i class="pi pi-spinner pi-spin"></i> Calculando disponibilidad...</div>
+      } @else if (availability().length === 0) {
+        <div class="empty-state">
+          <i class="pi pi-cog"></i>
+          <p>Todavía no hay productos fabricados. Usa "Producto nuevo" para dar de alta el primero con su receta.</p>
+        </div>
+      } @else {
+        <div class="rm-field-single">
+          <label for="produce-product">Producto</label>
+          <select id="produce-product" [ngModel]="selectedProductId()" (ngModelChange)="onSelectProduct($event)">
+            <option [ngValue]="null">Selecciona un producto</option>
+            @for (item of availability(); track item.productId) {
+              <option [ngValue]="item.productId">
+                {{ item.productName }} — puedes fabricar {{ item.maxProducible | number: '1.0-4' }} {{ item.productUnitAbbreviation }}
+              </option>
+            }
+          </select>
+        </div>
+
+        @if (selected(); as sel) {
+          <div class="summary-chips">
+            <span class="chip" [class.chip-danger]="sel.maxProducible <= 0">
+              Puedes fabricar <strong>{{ sel.maxProducible | number: '1.0-4' }}</strong>
+            </span>
+            <span class="chip">En almacén <strong>{{ sel.currentStock | number: '1.0-4' }}</strong></span>
+            @if (!editingRecipe()) {
+              <button type="button" class="btn-link" *appHasPermission="'WAREHOUSES.EDIT_RECIPE'"
+                (click)="onEditRecipe()" [disabled]="loadingRecipe()">
+                @if (loadingRecipe()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-pencil"></i> }
+                Editar receta
+              </button>
+            }
+          </div>
+
+          @if (editingRecipe()) {
+            <p class="section-title">Receta (insumos por 1 unidad)</p>
+            <app-recipe-editor [supplies]="supplies()" [supplyStock]="supplyStock()" [(lines)]="recipeDraft" />
+          } @else {
+            @if (sel.supplies.length === 0) {
+              <p class="warn-text">Este producto no tiene receta activa. Edita su receta para poder fabricarlo.</p>
+            } @else {
+              <ng-container *ngTemplateOutlet="consumptionTable; context: { $implicit: existingConsumption() }" />
+            }
+
+            <div class="rm-row">
+              <div class="rm-field">
+                <label for="produce-qty">Cantidad a fabricar</label>
+                <input id="produce-qty" type="number" min="0" [step]="existingStep()" [max]="sel.maxProducible"
+                  [ngModel]="quantity()" (ngModelChange)="quantity.set($event)" />
+                @if (sel.maxProducible > 0) {
+                  <button type="button" class="btn-link small" (click)="quantity.set(sel.maxProducible)">
+                    Usar el máximo ({{ sel.maxProducible | number: '1.0-4' }})
+                  </button>
+                }
+              </div>
+              <div class="rm-field">
+                <label for="produce-notes">Notas</label>
+                <input id="produce-notes" type="text" [(ngModel)]="notes" maxlength="500" placeholder="ej: Turno mañana" />
+              </div>
+            </div>
+          }
+        }
+      }
+    }
+
+    <!-- ===== Producto nuevo ===== -->
+    @if (mode() === 'new') {
+      <div class="rm-row">
+        <div class="rm-field">
+          <label for="new-name">Nombre *</label>
+          <input id="new-name" type="text" [(ngModel)]="newForm.name" maxlength="200" placeholder="ej: Pastel chico" />
+        </div>
+        <div class="rm-field">
+          <label for="new-sku">SKU</label>
+          <input id="new-sku" type="text" [(ngModel)]="newForm.sku" maxlength="100" placeholder="Opcional" />
+        </div>
+      </div>
+      <div class="rm-row">
+        <div class="rm-field">
+          <label for="new-unit">Unidad *</label>
+          <select id="new-unit" [(ngModel)]="newForm.unitId">
+            <option [ngValue]="null">Selecciona una unidad</option>
+            @for (unit of units(); track unit.id) {
+              <option [ngValue]="unit.id">{{ unit.name }} ({{ unit.abbreviation }})</option>
+            }
+          </select>
+        </div>
+        <div class="rm-field">
+          <label for="new-price">Precio de venta (sin IVA) *</label>
+          <input id="new-price" type="number" min="0" step="any" [(ngModel)]="newForm.price" placeholder="0.00" />
+        </div>
+      </div>
+      <div class="rm-row">
+        <div class="rm-field">
+          <label for="new-category">Categoría</label>
+          <select id="new-category" [(ngModel)]="newForm.categoryId">
+            <option [ngValue]="null">Sin categoría</option>
+            @for (category of categories(); track category.id) {
+              <option [ngValue]="category.id">{{ category.name }}</option>
+            }
+          </select>
+        </div>
+        <div class="rm-field">
+          <label for="new-tax">Impuesto</label>
+          <select id="new-tax" [(ngModel)]="newForm.taxRateId">
+            <option [ngValue]="null">Sin impuesto</option>
+            @for (tax of taxRates(); track tax.id) {
+              <option [ngValue]="tax.id">{{ tax.name }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
+      <p class="section-title">Receta (insumos por 1 unidad)</p>
+      <app-recipe-editor [supplies]="supplies()" [supplyStock]="supplyStock()" [(lines)]="newRecipe" />
+
+      @if (newRecipe().length > 0) {
+        <div class="summary-chips">
+          <span class="chip" [class.chip-danger]="newMaxProducible() <= 0">
+            Con el stock actual puedes fabricar <strong>{{ newMaxProducible() | number: '1.0-4' }}</strong>
+          </span>
+        </div>
+      }
+
+      <div class="rm-row">
+        <div class="rm-field">
+          <label for="new-qty">Fabricar ahora</label>
+          <input id="new-qty" type="number" min="0" [step]="newStep()" [max]="newMaxProducible()"
+            [ngModel]="newQuantity()" (ngModelChange)="newQuantity.set($event)" />
+          <span class="field-hint">0 = solo darlo de alta</span>
+        </div>
+        <div class="rm-field">
+          <label for="new-notes">Notas</label>
+          <input id="new-notes" type="text" [(ngModel)]="notes" maxlength="500" placeholder="Opcional" />
+        </div>
+      </div>
+
+      @if ((newQuantity() ?? 0) > 0 && newRecipe().length > 0) {
+        <ng-container *ngTemplateOutlet="consumptionTable; context: { $implicit: newConsumption() }" />
+      }
+    }
+  </div>
+
+  <div class="rm-footer">
+    @if (mode() === 'existing' && editingRecipe()) {
+      <button class="rm-btn-cancel" (click)="editingRecipe.set(false)">Cancelar edición</button>
+      <button class="rm-btn-save" (click)="onSaveRecipe()" [disabled]="saving()">
+        @if (saving()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+        Guardar receta
+      </button>
+    } @else {
+      <button class="rm-btn-cancel" (click)="onClose()">Cancelar</button>
+      @if (mode() === 'existing') {
+        <button class="rm-btn-save" (click)="onProduceExisting()"
+          [disabled]="saving() || !selected() || (selected()?.maxProducible ?? 0) <= 0">
+          @if (saving()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+          Fabricar
+        </button>
+      } @else {
+        <button class="rm-btn-save" (click)="onCreateNew()" [disabled]="saving()">
+          @if (saving()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+          {{ (newQuantity() ?? 0) > 0 ? 'Dar de alta y fabricar' : 'Dar de alta' }}
+        </button>
+      }
+    }
+  </div>
+</p-dialog>
+
+<!-- Tabla de consumo: qué insumos se usan y con cuánto queda el almacén -->
+<ng-template #consumptionTable let-rows>
+  <div class="table-scroll">
+    <table class="consumption-table">
+      <thead>
+        <tr>
+          <th>Insumo</th>
+          <th style="text-align: right">Por unidad</th>
+          <th style="text-align: right">En almacén</th>
+          <th style="text-align: right">Se usan</th>
+          <th style="text-align: right">Quedan</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rows; track row.supplyProductId) {
+          <tr [class.row-short]="row.remaining < 0 || !row.isActive">
+            <td>
+              {{ row.supplyProductName }}
+              @if (!row.isActive) { <span class="tag tag-danger">inactivo</span> }
+              @else if (row.isLimiting) { <span class="tag" title="Este insumo limita cuántos se pueden fabricar">limita</span> }
+            </td>
+            <td style="text-align: right">{{ row.quantityPerUnit | number: '1.0-4' }} {{ row.supplyUnit || '' }}</td>
+            <td style="text-align: right">{{ row.stock | number: '1.0-4' }}</td>
+            <td style="text-align: right">{{ row.needed | number: '1.0-4' }}</td>
+            <td style="text-align: right">{{ row.remaining | number: '1.0-4' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</ng-template>

@@ -4,7 +4,12 @@ export interface IProduct {
   sku: string | null;
   name: string;
   description: string | null;
-  unit: string | null;
+  /** Unidad de medida del catálogo global (ver `IUnitOfMeasure`) — decide qué cantidades acepta */
+  unitId: number;
+  unitName: string;
+  unitAbbreviation: string;
+  /** Decimales que admite la unidad: 0 = solo enteros */
+  unitDecimalPlaces: number;
   /** Precio de venta unitario, sin impuesto */
   price: number;
   cost: number | null;
@@ -20,6 +25,10 @@ export interface IProduct {
   isActive: boolean;
   /** Si es true, el producto es un combo/kit — sus componentes se manejan vía /combo-items */
   isCombo: boolean;
+  /** "Supply" = insumo: no se vende, se consume al fabricar. Exclusivo: nunca es las dos cosas */
+  kind: ProductKind;
+  /** Producto con receta de insumos que se fabrica en almacén (ver /recipe y /api/Production). Siempre kind="Product" */
+  isManufactured: boolean;
   /** null si el producto no tiene proveedor asignado */
   supplierId: number | null;
   supplierName: string | null;
@@ -35,6 +44,8 @@ export interface IProduct {
   modifiedBy: string | null;
 }
 
+export type ProductKind = 'Product' | 'Supply';
+
 /** `Percentage`: commissionValue es lo que se queda la tienda (ej. 30 = tienda 30%, consignador 70%). `FixedAmount`: lo que se le paga al consignador por unidad, sin importar el precio */
 export type CommissionType = 'Percentage' | 'FixedAmount';
 
@@ -44,7 +55,8 @@ export interface IProductRequest {
   sku?: string | null;
   name: string;
   description?: string | null;
-  unit?: string | null;
+  /** Unidad activa del catálogo global. Obligatoria */
+  unitId: number;
   price: number;
   cost?: number | null;
   /** Si se manda, debe pertenecer a la misma empresa del producto */
@@ -54,6 +66,11 @@ export interface IProductRequest {
   /** Solo admin de sistema: crea el producto en otra empresa. Si se omite, usa la empresa del que llama. */
   companyId?: number;
   isCombo: boolean;
+  /**
+   * Al crear, default "Product". Al editar es opcional: si se omite, el tipo se queda como estaba.
+   * Un insumo no puede ser combo ni tener proveedor consignador.
+   */
+  kind?: ProductKind;
   /** Si no apunta a un proveedor con isConsignor=true, commissionType/commissionValue se ignoran (quedan null) */
   supplierId?: number | null;
   commissionType?: CommissionType | null;
@@ -80,4 +97,45 @@ export interface IComboItem {
  */
 export interface IAssignComboItemsRequest {
   items: { componentProductId: number; quantity: number }[];
+}
+
+/** Respuesta de GET /api/Products/{id}/recipe: cantidad de cada insumo por 1 unidad del producto fabricado */
+export interface IRecipeItem {
+  supplyProductId: number;
+  supplyProductName: string;
+  supplyProductSku: string | null;
+  /** Abreviatura de la unidad del insumo */
+  supplyUnit: string | null;
+  supplyUnitDecimalPlaces: number;
+  quantity: number;
+}
+
+/** Línea de receta en los bodies: el insumo debe ser kind="Supply", activo y de la misma empresa; sin repetidos */
+export interface IRecipeItemRequest {
+  supplyProductId: number;
+  quantity: number;
+}
+
+/** Body de POST /api/Products/{id}/recipe: reemplaza la receta completa (mínimo una línea) */
+export interface IAssignRecipeRequest {
+  items: IRecipeItemRequest[];
+}
+
+/**
+ * Body de POST /api/Products/manufactured: alta de un producto fabricado junto con su receta, en una
+ * transacción. Siempre kind="Product", no combo, sin proveedor.
+ */
+export interface IManufacturedProductRequest {
+  sku?: string | null;
+  name: string;
+  description?: string | null;
+  /** Unidad activa del catálogo global. Obligatoria */
+  unitId: number;
+  price: number;
+  cost?: number | null;
+  categoryId?: number | null;
+  taxRateId?: number | null;
+  /** Solo admin de sistema: crea el producto en otra empresa */
+  companyId?: number | null;
+  recipe: IRecipeItemRequest[];
 }

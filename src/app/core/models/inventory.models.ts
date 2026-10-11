@@ -1,11 +1,18 @@
 import { IPageFilters } from './pagination.models';
+import { ProductKind } from './product.models';
 
-/** Respuesta de GET /api/Inventory y /api/Inventory/{id} */
+/** Respuesta de GET /api/Inventory y /api/Inventory/{id} (nunca incluye combos) */
 export interface IInventoryItem {
   id: number;
   productId: number;
   productName: string;
   productSku: string;
+  /** Separa las pestañas Productos / Insumos del almacén */
+  productKind: ProductKind;
+  isManufactured: boolean;
+  /** Unidad del producto: decide el `step` y la validación de movimientos, entradas y stock mínimo */
+  unitAbbreviation: string;
+  unitDecimalPlaces: number;
   warehouseId: number;
   warehouseName: string;
   quantity: number;
@@ -26,6 +33,42 @@ export interface IInventoryFilters {
   lowStockOnly?: boolean;
 }
 
+/**
+ * Un combo no tiene stock propio (la venta descuenta sus componentes) — GET /api/Inventory ya no
+ * los devuelve. Su disponibilidad se calcula en GET /api/Inventory/combo-availability.
+ */
+export interface IComboComponentAvailability {
+  componentProductId: number;
+  componentProductName: string;
+  quantityPerCombo: number;
+  /** Stock del componente en el almacén (0 si no tiene registro de inventario ahí) */
+  stock: number;
+  /** floor(max(stock, 0) / quantityPerCombo), o 0 si el componente está inactivo */
+  combosPossible: number;
+  isActive: boolean;
+  /** true si este componente es (uno de) los que limitan cuántos combos se pueden vender */
+  isLimiting: boolean;
+}
+
+/** Cuántos combos se pueden vender desde un almacén con el stock actual de sus componentes. Solo informativo */
+export interface IComboAvailability {
+  comboProductId: number;
+  comboProductName: string;
+  comboProductSku: string | null;
+  warehouseId: number;
+  warehouseName: string;
+  /** Mínimo de `combosPossible` entre sus componentes activos; 0 si no tiene componentes activos */
+  availableQuantity: number;
+  companyId: number;
+  components: IComboComponentAvailability[];
+}
+
+/** Query params opcionales de GET /api/Inventory/combo-availability */
+export interface IComboAvailabilityFilters {
+  warehouseId?: number;
+  productId?: number;
+}
+
 /** Body de POST /api/Inventory/{id}/min-stock. null quita la alerta. */
 export interface IMinStockRequest {
   minStock: number | null;
@@ -37,7 +80,21 @@ export interface IMinStockRequest {
  * "Return" se genera automáticamente al procesar una devolución (POST /api/returns) y también está
  * disponible para registrar manualmente un movimiento (POST /api/InventoryMovements).
  */
-export type InventoryMovementType = 'In' | 'Out' | 'Adjustment' | 'Purchase' | 'Sale' | 'Return';
+export type InventoryMovementType =
+  | 'In'
+  | 'Out'
+  | 'Adjustment'
+  | 'Purchase'
+  | 'Sale'
+  | 'Return'
+  | 'Production'
+  | 'Disassembly';
+
+/**
+ * Tipos que se pueden registrar a mano en POST /api/InventoryMovements. "Production"/"Disassembly"
+ * solo los genera /api/Production (el backend los rechaza en movimientos manuales).
+ */
+export type ManualInventoryMovementType = Exclude<InventoryMovementType, 'Production' | 'Disassembly'>;
 
 /** Respuesta de GET /api/InventoryMovements y /api/InventoryMovements/{id} */
 export interface IInventoryMovement {
@@ -54,6 +111,8 @@ export interface IInventoryMovement {
   /** Solo relevante para type="Purchase" — de qué proveedor se recibió la mercancía */
   supplierId: number | null;
   supplierName: string | null;
+  /** Orden de producción que generó el movimiento (type Production/Disassembly); null en el resto */
+  productionOrderId: number | null;
   companyId: number;
   createdAt: string;
   createdBy: string;
@@ -63,6 +122,7 @@ export interface IInventoryMovement {
 export interface IInventoryMovementFilters extends IPageFilters {
   productId?: number;
   warehouseId?: number;
+  productionOrderId?: number;
   from?: string;
   to?: string;
 }
@@ -71,7 +131,7 @@ export interface IInventoryMovementFilters extends IPageFilters {
 export interface IInventoryMovementRequest {
   productId: number;
   warehouseId: number;
-  type: InventoryMovementType;
+  type: ManualInventoryMovementType;
   quantity: number;
   notes?: string | null;
   /** Opcional, solo aplica cuando type="Purchase" */

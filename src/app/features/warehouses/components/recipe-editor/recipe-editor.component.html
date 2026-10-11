@@ -1,0 +1,57 @@
+<div class="table-scroll">
+  <table class="recipe-table">
+    <thead>
+      <tr>
+        <th>Insumo</th>
+        <th style="width: 120px">Por unidad</th>
+        <th style="text-align: right">En almacén</th>
+        <th style="width: 44px"></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (line of lines(); track line.supplyProductId) {
+        <tr>
+          <td>{{ line.supplyProductName }}</td>
+          <td>
+            <div class="qty-with-unit">
+              <input
+                type="number"
+                class="cell-input"
+                min="0"
+                [step]="lineStep(line)"
+                [attr.aria-label]="'Cantidad de ' + line.supplyProductName + ' por unidad'"
+                [ngModel]="line.quantity"
+                (ngModelChange)="onChangeQuantity(line.supplyProductId, $event)"
+              />
+              <span class="unit">{{ line.supplyUnit || '' }}</span>
+            </div>
+          </td>
+          <td style="text-align: right">{{ stockOf(line.supplyProductId) | number: '1.0-4' }}</td>
+          <td>
+            <button type="button" class="remove-btn" (click)="onRemove(line.supplyProductId)" [attr.aria-label]="'Quitar ' + line.supplyProductName">
+              <i class="pi pi-times"></i>
+            </button>
+          </td>
+        </tr>
+      } @empty {
+        <tr><td colspan="4" class="empty-row">Agrega al menos un insumo</td></tr>
+      }
+    </tbody>
+  </table>
+</div>
+
+<div class="add-row">
+  <select [(ngModel)]="addSupplyId" aria-label="Insumo a agregar">
+    <option [ngValue]="null">Selecciona un insumo</option>
+    @for (supply of availableSupplies(); track supply.id) {
+      <option [ngValue]="supply.id">{{ supply.name }} ({{ supply.unitAbbreviation }})</option>
+    }
+  </select>
+  <input type="number" [(ngModel)]="addQuantity" min="0" [step]="addStep()" placeholder="Cant." aria-label="Cantidad por unidad" />
+  <button type="button" class="add-btn" (click)="onAdd()" [disabled]="!addSupplyId || !addQuantity || addQuantity <= 0">
+    <i class="pi pi-plus"></i> Agregar
+  </button>
+</div>
+@if (supplies().length === 0) {
+  <p class="hint">No hay insumos dados de alta en la empresa — créalos en Productos con tipo "Insumo".</p>
+}

@@ -1,0 +1,43 @@
+.table-card { background: #fff; border-radius: 16px; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06); overflow: hidden; }
+.table-toolbar {
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;
+  padding: 1.25rem 1.5rem; border-bottom: 1px solid #f0f0f5;
+}
+.type-filter {
+  padding: 0.6rem 2.25rem 0.6rem 0.875rem; border: 2px solid #e5e7eb; border-radius: 10px;
+  font-size: 0.875rem; color: #1a1a2e; background: #f9fafb; outline: none;
+  &:focus { border-color: var(--brand-button); background: #fff; }
+}
+.item-count { font-size: 0.8125rem; color: #8c8c9e; font-weight: 500; }
+
+.loading-state { display: flex; align-items: center; justify-content: center; gap: 0.5rem; color: #8c8c9e; font-size: 0.875rem; padding: 2.5rem 0; }
+.empty-state { text-align: center; padding: 3rem; i { font-size: 2.5rem; color: #d1d5db; } p { margin-top: 0.75rem; color: #9ca3af; } }
+
+.table-scroll { overflow-x: auto; }
+.orders-table {
+  width: 100%; border-collapse: collapse; font-size: 0.875rem;
+  th { text-align: left; padding: 0.875rem 1.25rem; background: #f8f9fc; color: #4a4a5a; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.6px; border-bottom: 2px solid #e8eaf0; white-space: nowrap; }
+  td { padding: 0.75rem 1.25rem; border-bottom: 1px solid #f3f4f6; color: #374151; }
+  tbody tr:hover td { background: #f8f9fc; }
+  &.compact { font-size: 0.8125rem; th, td { padding: 0.5rem 0.625rem; } }
+}
+.folio { font-weight: 700; color: #1a1a2e; }
+.product-name { display: block; font-weight: 600; color: #1a1a2e; }
+.product-sku { display: block; font-size: 0.75rem; color: #9ca3af; margin-top: 0.125rem; }
+
+.order-type {
+  display: inline-block; padding: 0.125rem 0.5rem; border-radius: 20px; font-size: 0.6875rem; font-weight: 700;
+  &.type-production { background: #ecfdf5; color: #059669; }
+  &.type-disassembly { background: #f5f3ff; color: #7c3aed; }
+}
+
+.action-btn {
+  display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px;
+  border: none; border-radius: 8px; background: transparent; color: #6b7280; cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  &:hover { transform: scale(1.1); background: rgba(107, 114, 128, 0.12); }
+}
+
+.modal-item-label { margin: 0 0 0.25rem; font-weight: 700; font-size: 0.9375rem; color: #1a1a2e; }
+.modal-item-sublabel { margin: 0 0 0.75rem; font-size: 0.8125rem; color: #8c8c9e; }
+.hint { margin: 0.625rem 0 0; font-size: 0.75rem; color: #8c8c9e; }

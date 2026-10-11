@@ -1,0 +1,63 @@
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+.header-left { display: flex; align-items: center; gap: 0.75rem; h2 { margin: 0; font-size: 1.5rem; font-weight: 700; color: #1a1a2e; } }
+.header-icon { font-size: 1.5rem; color: var(--brand-button); background: rgba(var(--brand-button-rgb), 0.1); padding: 0.75rem; border-radius: 12px; }
+.subtitle { font-size: 0.8125rem; color: #8c8c9e; }
+.btn-primary { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.7rem 1.25rem; border: none; border-radius: 10px; font-size: 0.875rem; font-weight: 600; color: #fff; background: linear-gradient(135deg, rgba(255,255,255,0.18), rgba(0,0,0,0.15)), var(--brand-button); cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; &:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(var(--brand-button-rgb), 0.35); } }
+
+.table-card { background: #fff; border-radius: 16px; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06); overflow: hidden; }
+.table-toolbar {
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;
+  padding: 1.25rem 1.5rem; border-bottom: 1px solid #f0f0f5;
+}
+.search-box {
+  position: relative; width: 320px; max-width: 100%;
+  i { position: absolute; left: 0.875rem; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 0.875rem; }
+  input {
+    width: 100%; padding: 0.625rem 0.875rem 0.625rem 2.5rem;
+    border: 2px solid #e5e7eb; border-radius: 10px;
+    font-size: 0.875rem; color: #1a1a2e; background: #f9fafb;
+    outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+    &::placeholder { color: #b0b0c0; }
+    &:focus { border-color: var(--brand-button); background: #fff; box-shadow: 0 0 0 3px rgba(var(--brand-button-rgb), 0.12); }
+  }
+}
+.item-count { font-size: 0.8125rem; color: #8c8c9e; font-weight: 500; }
+.table-scroll { overflow-x: auto; }
+
+:host ::ng-deep .p-datatable {
+  .p-datatable-thead > tr > th { background: #f8f9fc; color: #4a4a5a; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.6px; padding: 0.875rem 1.25rem; border: none; border-bottom: 2px solid #e8eaf0; }
+  .p-datatable-tbody > tr { > td { padding: 0.875rem 1.25rem; border: none; border-bottom: 1px solid #f3f4f6; font-size: 0.875rem; color: #374151; } &:hover > td { background: #f8f9fc; } }
+  .p-datatable-tbody > tr.inactive-row > td { color: #9ca3af; }
+}
+
+.unit-name { font-weight: 600; color: #1a1a2e; }
+code { font-family: 'Courier New', monospace; font-size: 0.8125rem; background: #f3f4f6; padding: 0.2rem 0.5rem; border-radius: 4px; }
+
+.decimals-badge {
+  display: inline-block; padding: 0.2rem 0.625rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600;
+  background: rgba(var(--brand-button-rgb), 0.1); color: var(--brand-button);
+  &.integer { background: #f3f4f6; color: #4a4a5a; }
+}
+.status-badge {
+  display: inline-block; padding: 0.125rem 0.5rem; border-radius: 20px;
+  font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+  background: #f3f4f6; color: #6b7280;
+  &.active { background: #ecfdf5; color: #059669; }
+}
+
+.actions-cell { display: flex; justify-content: center; gap: 0.375rem; }
+.action-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border: none; border-radius: 8px;
+  cursor: pointer; background: transparent; transition: background 0.15s, transform 0.1s;
+  i { font-size: 0.875rem; }
+  &:hover { transform: scale(1.1); }
+  &.edit { color: var(--brand-button); &:hover { background: rgba(var(--brand-button-rgb), 0.1); } }
+  &.delete { color: #ef4444; &:hover { background: rgba(239, 68, 68, 0.1); } }
+  &.activate { color: #059669; &:hover { background: rgba(5, 150, 105, 0.1); } }
+}
+
+.field-hint { display: block; margin-top: 0.375rem; font-size: 0.75rem; color: #8c8c9e; }
+.empty-state { text-align: center; padding: 3rem; i { font-size: 2.5rem; color: #d1d5db; } p { margin-top: 0.75rem; color: #9ca3af; } }
+
+@media (max-width: 768px) { .page-header { flex-direction: column; align-items: flex-start; } }

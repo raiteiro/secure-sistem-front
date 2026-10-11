@@ -44,7 +44,7 @@
               @for (item of r.items; track item.productName) {
                 <tr>
                   <td>{{ item.quantity }}x {{ item.productName }}</td>
-                  <td class="receipt-amount">{{ item.lineTotal | number: '1.2-2' }}</td>
+                  <td class="receipt-amount">{{ item.total | number: '1.2-2' }}</td>
                 </tr>
               }
             </tbody>
@@ -164,7 +164,9 @@
               }
               <div class="product-grid">
                 @for (product of group.products; track product.id) {
-                  <button class="product-card" (click)="addToCart(product)">
+                  <button class="product-card" (click)="addToCart(product)"
+                    [class.out-of-stock]="stockWarehouseId() && availableFor(product.id) <= 0"
+                    [attr.aria-disabled]="!stockWarehouseId() || availableFor(product.id) <= 0">
                     <span class="product-card-image">
                       @if (productImageUrl(product); as thumb) {
                         <img [src]="thumb" alt="" />
@@ -176,6 +178,15 @@
                     <span class="product-card-name">{{ product.name }}</span>
                     <span class="product-card-sku">{{ product.sku || '—' }}</span>
                     <span class="product-card-price">{{ product.price | number: '1.2-2' }}</span>
+                    @if (stockWarehouseId()) {
+                      @if (stockLoading()) {
+                        <span class="product-card-stock"><i class="pi pi-spinner pi-spin"></i></span>
+                      } @else if (availableFor(product.id) > 0) {
+                        <span class="product-card-stock">Disponibles: {{ availableFor(product.id) | number: '1.0-4' }} {{ product.unitAbbreviation }}</span>
+                      } @else {
+                        <span class="product-card-stock empty">Sin existencias</span>
+                      }
+                    }
                   </button>
                 }
               </div>
@@ -188,6 +199,12 @@
       <div class="pos-side">
         <div class="side-card cart-card">
           <h3 class="side-title">Venta actual @if (cartComputed().length > 0) { ({{ cartComputed().length }}) }</h3>
+          @if (cartStockIssues().length > 0) {
+            <div class="stock-warning" role="alert">
+              <i class="pi pi-exclamation-triangle"></i>
+              <span>No alcanzan las existencias de este almacén para: {{ cartStockIssues().join(', ') }}. Ajusta las cantidades o elige otro almacén.</span>
+            </div>
+          }
           <div class="cart-lines">
             @for (line of cartComputed(); track line.productId) {
               <div class="cart-line">
@@ -195,18 +212,23 @@
                   <span class="cart-line-name">{{ line.productName }}</span>
                   <button class="remove-btn" (click)="removeLine(line)" title="Quitar"><i class="pi pi-times"></i></button>
                 </div>
-                <span class="cart-line-meta">{{ line.productSku || '—' }} · {{ line.price | number: '1.2-2' }} c/u</span>
+                <span class="cart-line-meta">{{ line.productSku || '—' }} · {{ line.price | number: '1.2-2' }} / {{ line.unitAbbreviation }}</span>
                 <div class="cart-line-controls">
                   <div class="qty-stepper">
                     <button class="qty-btn" (click)="updateQuantity(line, line.quantity - 1)" [disabled]="line.quantity <= 1"><i class="pi pi-minus"></i></button>
                     <input
                       type="number"
                       class="qty-input"
-                      min="1"
+                      min="0"
+                      [step]="lineStep(line)"
+                      [attr.aria-label]="'Cantidad de ' + line.productName"
                       [ngModel]="line.quantity"
                       (ngModelChange)="updateQuantity(line, $event)"
                     />
-                    <button class="qty-btn" (click)="updateQuantity(line, line.quantity + 1)"><i class="pi pi-plus"></i></button>
+                    <button class="qty-btn" (click)="updateQuantity(line, line.quantity + 1)"
+                      [disabled]="availableFor(line.productId) <= 0" title="Agregar uno más" aria-label="Agregar uno más">
+                      <i class="pi pi-plus"></i>
+                    </button>
                   </div>
                   <input
                     type="number"
@@ -240,7 +262,7 @@
           </div>
           <div class="rm-field-single">
             <label>Almacén *</label>
-            <select [(ngModel)]="selectedWarehouseId">
+            <select [(ngModel)]="selectedWarehouseId" (ngModelChange)="onWarehouseChange()">
               <option [ngValue]="null">Selecciona un almacén</option>
               @for (warehouse of availableWarehouses(); track warehouse.id) {
                 <option [ngValue]="warehouse.id">{{ warehouse.name }}</option>

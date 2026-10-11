@@ -19,6 +19,7 @@ export class InventoryMovementsService {
     let params = new HttpParams();
     if (filters?.productId) params = params.set('productId', filters.productId);
     if (filters?.warehouseId) params = params.set('warehouseId', filters.warehouseId);
+    if (filters?.productionOrderId) params = params.set('productionOrderId', filters.productionOrderId);
     if (filters?.from) params = params.set('from', filters.from);
     if (filters?.to) params = params.set('to', filters.to);
     if (filters?.page) params = params.set('page', filters.page);

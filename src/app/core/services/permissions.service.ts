@@ -1,4 +1,4 @@
-import { Injectable, effect, inject, signal } from '@angular/core';
+import { Injectable, effect, inject, signal, untracked } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -26,20 +26,24 @@ export class PermissionsService {
   constructor() {
     effect(() => {
       const user = this.authService.currentUser();
+      // untracked: escribir un signal dentro de un effect lanza NG0600 en Angular < 19; la única dependencia es currentUser
+      untracked(() => this.onUserChange(user?.id ?? null));
+    });
+  }
 
-      if (!user) {
-        this.loadedForUserId = null;
-        this.grantedKeys.set(null);
-        return;
-      }
+  private onUserChange(userId: number | null): void {
+    if (userId === null) {
+      this.loadedForUserId = null;
+      this.grantedKeys.set(null);
+      return;
+    }
 
-      if (user.id === this.loadedForUserId) return;
-      this.loadedForUserId = user.id;
+    if (userId === this.loadedForUserId) return;
+    this.loadedForUserId = userId;
 
-      this.http.get<string[]>(`${this.apiUrl}/my-permissions`).subscribe({
-        next: (keys) => this.grantedKeys.set(new Set(keys)),
-        error: () => this.grantedKeys.set(new Set())
-      });
+    this.http.get<string[]>(`${this.apiUrl}/my-permissions`).subscribe({
+      next: (keys) => this.grantedKeys.set(new Set(keys)),
+      error: () => this.grantedKeys.set(new Set())
     });
   }
 

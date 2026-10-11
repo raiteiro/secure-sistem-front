@@ -10,6 +10,8 @@ import {
   ITopProduct,
   ITopProductsFilters
 } from '../../../core/models/report.models';
+import { IPageFilters, IPagedResult } from '../../../core/models/pagination.models';
+import { MAX_PAGE_SIZE, fetchAllPages } from '../../../core/utils/fetch-all-pages.util';
 
 @Injectable({ providedIn: 'root' })
 export class ReportsService {
@@ -37,12 +39,19 @@ export class ReportsService {
   }
 
   /** Todos los filtros son opcionales. from/to filtran por closedAt (solo turnos ya cerrados) */
-  getCashierCloseouts(filters?: ICashierCloseoutFilters): Observable<ICashierCloseout[]> {
+  getCashierCloseoutsPage(filters?: ICashierCloseoutFilters & IPageFilters): Observable<IPagedResult<ICashierCloseout>> {
     let params = new HttpParams();
     if (filters?.from) params = params.set('from', filters.from);
     if (filters?.to) params = params.set('to', filters.to);
     if (filters?.userId) params = params.set('userId', filters.userId);
     if (filters?.branchId) params = params.set('branchId', filters.branchId);
-    return this.http.get<ICashierCloseout[]>(`${this.apiUrl}/cashier-closeouts`, { params });
+    if (filters?.page) params = params.set('page', filters.page);
+    if (filters?.pageSize) params = params.set('pageSize', filters.pageSize);
+    return this.http.get<IPagedResult<ICashierCloseout>>(`${this.apiUrl}/cashier-closeouts`, { params });
+  }
+
+  /** Igual que `getCashierCloseoutsPage`, pero recorre todas las páginas */
+  getCashierCloseouts(filters?: ICashierCloseoutFilters): Observable<ICashierCloseout[]> {
+    return fetchAllPages((page) => this.getCashierCloseoutsPage({ ...filters, page, pageSize: MAX_PAGE_SIZE }));
   }
 }

@@ -1,0 +1,94 @@
+<div class="table-card">
+  <div class="table-toolbar">
+    <select class="type-filter" [(ngModel)]="typeFilter" (ngModelChange)="onFilterChange()" aria-label="Tipo de orden">
+      <option [ngValue]="null">Todas las órdenes</option>
+      <option value="Production">Fabricación</option>
+      <option value="Disassembly">Separación</option>
+    </select>
+    <span class="item-count">{{ totalCount() }} orden(es)</span>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state"><i class="pi pi-spinner pi-spin"></i> Cargando...</div>
+  } @else if (orders().length === 0) {
+    <div class="empty-state"><i class="pi pi-cog"></i><p>Todavía no hay órdenes de producción en este almacén</p></div>
+  } @else {
+    <div class="table-scroll">
+      <table class="orders-table">
+        <thead>
+          <tr>
+            <th>Folio</th>
+            <th>Fecha</th>
+            <th>Tipo</th>
+            <th>Producto</th>
+            <th style="text-align: right">Cantidad</th>
+            <th>Usuario</th>
+            <th style="width: 50px"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (order of orders(); track order.id) {
+            <tr>
+              <td class="folio">#{{ order.folioNumber }}</td>
+              <td>{{ order.createdAt | date: 'short' }}</td>
+              <td><span class="order-type" [class]="'order-type type-' + order.type.toLowerCase()">{{ typeLabels[order.type] }}</span></td>
+              <td>
+                <span class="product-name">{{ order.productName }}</span>
+                <span class="product-sku">{{ order.productSku || '—' }}</span>
+              </td>
+              <td style="text-align: right">{{ order.quantity | number: '1.0-4' }}</td>
+              <td>{{ order.createdBy }}</td>
+              <td>
+                <button class="action-btn" (click)="onViewDetail(order)" title="Ver detalle" [attr.aria-label]="'Ver detalle de la orden ' + order.folioNumber">
+                  <i class="pi pi-eye"></i>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <app-pager [page]="page()" [totalPages]="totalPages()" [totalCount]="totalCount()" [pageSize]="pageSize" (pageChange)="onPageChange($event)" />
+  }
+</div>
+
+<p-dialog [(visible)]="showDetail" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '560px' }" [breakpoints]="{ '768px': '95vw' }" [showHeader]="false" [contentStyle]="{ padding: '0' }"
+  styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi pi-eye"></i> Orden de producción</div>
+    <button class="rm-close" (click)="showDetail = false" aria-label="Cerrar"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    @if (detail; as order) {
+      <p class="modal-item-label">#{{ order.folioNumber }} · {{ typeLabels[order.type] }} · {{ order.quantity | number: '1.0-4' }} × {{ order.productName }}</p>
+      <p class="modal-item-sublabel">{{ order.createdAt | date: 'short' }} — {{ order.createdBy }}</p>
+      @if (order.notes) { <p class="modal-item-sublabel">Notas: {{ order.notes }}</p> }
+
+      <div class="table-scroll">
+        <table class="orders-table compact">
+          <thead>
+            <tr>
+              <th>Insumo</th>
+              <th style="text-align: right">Por unidad</th>
+              <th style="text-align: right">{{ order.type === 'Production' ? 'Se usaron' : 'Regresaron' }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of order.items; track item.supplyProductId) {
+              <tr>
+                <td>{{ item.supplyProductName }}</td>
+                <td style="text-align: right">{{ item.quantityPerUnit | number: '1.0-4' }} {{ item.supplyUnit || '' }}</td>
+                <td style="text-align: right">{{ item.totalQuantity | number: '1.0-4' }} {{ item.supplyUnit || '' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="hint">La receta que se muestra es la que tenía el producto al momento de la orden.</p>
+    }
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showDetail = false">Cerrar</button>
+  </div>
+</p-dialog>

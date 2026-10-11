@@ -64,6 +64,11 @@ export const routes: Routes = [
           import('./features/companies/companies.routes').then((m) => m.COMPANIES_ROUTES)
       },
       {
+        path: 'admin/unidades-medida',
+        loadChildren: () =>
+          import('./features/units-of-measure/units-of-measure.routes').then((m) => m.UNITS_OF_MEASURE_ROUTES)
+      },
+      {
         path: 'catalogo/sucursales',
         loadChildren: () =>
           import('./features/branches/branches.routes').then((m) => m.BRANCHES_ROUTES)

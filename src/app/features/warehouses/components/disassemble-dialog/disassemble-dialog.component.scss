@@ -1,0 +1,18 @@
+.modal-item-label { margin: 0 0 0.25rem; font-weight: 700; font-size: 0.9375rem; color: #1a1a2e; }
+.modal-item-sublabel { margin: 0 0 1rem; font-size: 0.8125rem; color: #8c8c9e; }
+
+.section-title {
+  margin: 0.5rem 0 0.625rem; font-weight: 600; font-size: 0.6875rem; color: #6b7280;
+  text-transform: uppercase; letter-spacing: 0.6px;
+}
+.loading-state { display: flex; align-items: center; gap: 0.5rem; color: #8c8c9e; font-size: 0.875rem; padding: 1rem 0; }
+.warn-text { margin: 0; font-size: 0.8125rem; color: #b45309; }
+.hint { margin: 0.5rem 0 0; font-size: 0.75rem; color: #8c8c9e; }
+
+.table-scroll { overflow-x: auto; }
+.returning-table {
+  width: 100%; border-collapse: collapse; font-size: 0.8125rem;
+  th { text-align: left; padding: 0.5rem 0.625rem; background: #f8f9fc; color: #4a4a5a; font-weight: 600; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #e8eaf0; }
+  td { padding: 0.5rem 0.625rem; border-bottom: 1px solid #f3f4f6; color: #374151; }
+  td.positive { color: #059669; font-weight: 600; }
+}

@@ -1,0 +1,58 @@
+<p-dialog [visible]="true" (visibleChange)="!$event && closed.emit()" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '560px' }" [breakpoints]="{ '768px': '95vw' }" [showHeader]="false" [contentStyle]="{ padding: '0' }"
+  styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi pi-sitemap"></i> Separar en insumos</div>
+    <button class="rm-close" (click)="closed.emit()" aria-label="Cerrar"><i class="pi pi-times"></i></button>
+  </div>
+
+  <div class="rm-body">
+    <p class="modal-item-label">{{ item().productName }}</p>
+    <p class="modal-item-sublabel">En este almacén: {{ item().quantity | number: '1.0-4' }} {{ item().unitAbbreviation }}</p>
+
+    <div class="rm-row">
+      <div class="rm-field">
+        <label for="disassemble-qty">Cantidad a separar</label>
+        <input id="disassemble-qty" type="number" min="0" [step]="step()" [max]="item().quantity"
+          [ngModel]="quantity()" (ngModelChange)="quantity.set($event)" />
+      </div>
+      <div class="rm-field">
+        <label for="disassemble-notes">Notas</label>
+        <input id="disassemble-notes" type="text" [(ngModel)]="notes" maxlength="500" placeholder="Opcional" />
+      </div>
+    </div>
+
+    <p class="section-title">Insumos que regresan al almacén</p>
+    @if (loadingRecipe()) {
+      <div class="loading-state"><i class="pi pi-spinner pi-spin"></i> Cargando receta...</div>
+    } @else if (recipe().length === 0) {
+      <p class="warn-text">Este producto no tiene receta activa, no se puede separar.</p>
+    } @else {
+      <div class="table-scroll">
+        <table class="returning-table">
+          <thead>
+            <tr><th>Insumo</th><th style="text-align: right">Por unidad</th><th style="text-align: right">Regresan</th></tr>
+          </thead>
+          <tbody>
+            @for (row of returning(); track row.supplyProductId) {
+              <tr>
+                <td>{{ row.supplyProductName }}</td>
+                <td style="text-align: right">{{ row.quantity | number: '1.0-4' }} {{ row.supplyUnit || '' }}</td>
+                <td style="text-align: right" class="positive">+{{ row.total | number: '1.0-4' }} {{ row.supplyUnit || '' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="hint">Se usa la receta actual del producto.</p>
+    }
+  </div>
+
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="closed.emit()">Cancelar</button>
+    <button class="rm-btn-save" (click)="onSave()" [disabled]="saving() || loadingRecipe() || recipe().length === 0 || item().quantity <= 0">
+      @if (saving()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+      Separar
+    </button>
+  </div>
+</p-dialog>

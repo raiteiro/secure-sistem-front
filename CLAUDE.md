@@ -259,13 +259,20 @@ Colores semánticos:
 - Ancho expandido: 260px, colapsado: 64px
 - Header (arriba, `.sidebar-header`): muestra el **nombre de la empresa del usuario logueado** (`authService.currentUser()?.companyName`), con fallback a "Sistema de Gestión" si por algo no está disponible. `.sidebar-brand` trunca con ellipsis (`text-overflow: ellipsis` + `min-width: 0`, necesario para que el ellipsis funcione dentro de un flex item) y lleva `[title]` con el nombre completo para cuando se corta
 - Background: mismo patrón de "difuminado" que botones/headers de modal — capa `linear-gradient(135deg, rgba(0,0,0,0.25), rgba(255,255,255,0.08))` encima de `var(--brand-header)` (NO un segundo color derivado, ver "Color de marca por empresa"). Hover/activo: `var(--brand-header-overlay-weak)`/`-strong` (blancos, fijos — ver por qué en "Color de marca por empresa")
-- Activo: además del overlay, border-left 3px `var(--brand-button)` — el estado activo se calcula comparando la ruta actual (`Router.events`) contra `item.routePath` en `SidebarComponent.isActive()`, **no** con `routerLinkActive` (los items son `<div>` con navegación por código, no `<a>`)
+- Activo: además del overlay, border-left 3px `var(--brand-button)` — el estado activo se calcula comparando la ruta actual (`Router.events`) contra `item.routePath` en `SidebarComponent.isActive()`, **no** con `routerLinkActive` (los items son `<div>` con navegación por código, no `<a>`). Un apartado se marca activo si alguna de sus rutas, a cualquier nivel, es la actual (`isGroupActive()`)
+- **Apartados con rutas = panel flotante, no acordeón**: el sidebar solo muestra el primer nivel. Clic (o Enter/Espacio) en un apartado abre un panel flotante (`.flyout`) a la derecha del sidebar, alineado con el apartado (o anclado por abajo si no cabe), con sus rutas; un tercer nivel va dentro del mismo panel como sección con título, nunca como otro panel encima. Se cierra al elegir ruta, clic fuera, `Esc` (regresa el foco al apartado), scroll del menú o resize. El panel vive **fuera** del `<aside>` en el template porque este tiene `overflow: hidden` y lo recortaría; va en `position: fixed` con `z-index` 1001. Se descartó el acordeón porque con varios apartados abiertos el menú crecía demasiado
 - Texto: `var(--brand-header-text-muted)`, activo: `var(--brand-header-text)` — ambas fijas (blanco/gris claro), todas las paletas usan header oscuro
 - Footer (botón logout): fondo gris neutro fijo `#33333d` y texto rojo `#e57373` — **a propósito ninguno de los dos usa `var(--brand-header)`/`var(--brand-button)`**, para que esta zona se distinga igual sin importar la paleta que elija la empresa
 
 **Textos y Copy**
 - Lenguaje neutro en género: evitar terminar saludos/textos en `-o`/`-a` cuando se dirigen al usuario (ej. no usar "Bienvenido"). Preferir formas neutras naturales del español (verbos, sustantivos sin marca de género) en vez de fórmulas artificiales tipo "bienvenide" o "bienvenid@". Ejemplo ya aplicado: el saludo del login es "Inicia sesión", no "Bienvenido"
 - Branding genérico: este es un sistema base para múltiples clínicas derivadas (médicas, veterinarias, nutrición, etc.), así que no hay que hardcodear un nombre de producto específico en el UI (ej. ya no se usa "SecureSistem" en login/sidebar/título de pestaña, se dejó "Sistema de Gestión" como texto neutro). Si se necesita branding con nombre propio, debe salir de configuración (environment/`InjectionToken`), no de texto fijo en el template
+
+**Cantidades y unidades de medida**
+- Todo producto tiene una unidad del catálogo global de unidades de medida (`/admin/unidades-medida`, lo administra solo el admin de sistema). `unitDecimalPlaces` decide qué cantidades acepta: 0 = solo enteros (pieza), 2 = metro con centímetros, 3 = kilo con gramos. El backend rechaza con 400 cualquier cantidad con más decimales
+- **Todo input de cantidad** (venta, devolución, movimiento, entrada, stock mínimo, receta, componentes de combo, fabricar/separar) usa `quantityStep(decimales)` para su `[step]` y valida con `quantityDecimalsError(...)` antes de enviar — ambos en `core/utils/quantity.util.ts`. No usar `step="any"` en cantidades de producto
+- La unidad que manda es la del producto al que pertenece la cantidad: en una receta, la del **insumo**; en un combo, la del **componente**
+- Las respuestas que traen cantidades de un producto incluyen `unitAbbreviation` + `unitDecimalPlaces` (o `supplyUnit`/`supplyUnitDecimalPlaces`, `productUnitAbbreviation`/`productUnitDecimalPlaces`) justo para esto — no hace falta cruzar con el catálogo
 
 **Patrones de componentes**
 - Cada feature tiene: listado + modal (no página separada para formularios simples)
@@ -278,8 +285,7 @@ Colores semánticos:
 
 Ya implementado en backend y frontend: permisos granulares por acción, además del permiso por
 ventana completa que ya existía vía `NavigationRoute`. El catálogo completo de ids, con su ruta y
-componente, vive en [PERMISSIONS.md](PERMISSIONS.md) — consultarlo antes de asignar un id nuevo,
-para no duplicar convención ni número.
+componente, vive en [PERMISSIONS.md](PERMISSIONS.md), que mantiene el backend (ver abajo).
 
 **Backend**: `GET /api/Permissions` (catálogo, `{ id, key, name, description, windowId, isActive,
 isDefaultForNewRoles }` — `name` ya en español, `windowId` es el mismo valor que
@@ -291,28 +297,21 @@ permisos" de Roles (`RoleListComponent.onManageAccess`), junto con la asignació
 acción se muestra anidada debajo de su ruta (emparejadas por `windowId`, nunca por `windowName`,
 que es texto libre), no en una pantalla separada.
 
-**Regla obligatoria a partir de ahora: todo botón que dispare una acción de negocio real (crear,
-editar, desactivar, exportar, abrir/cerrar turno, enviar correo, etc. — ver "Qué cuenta como
-acción" en PERMISSIONS.md) debe tener:**
-1. Un id de permiso en formato `MODULO.ACCION` (mayúsculas, `_` como separador dentro de cada
-   parte) — el módulo es estable por ventana, no cambia aunque cambie el texto del botón.
-2. La directiva `*appHasPermission="'MODULO.ACCION'"` (`shared/directives/has-permission.directive.ts`)
-   en el botón, para que se oculte si el usuario logueado no tiene ese permiso.
+**Los permisos los define y los maneja el backend, no el frontend.** Eso incluye qué ids existen,
+cómo se nombran, a qué ventana (`windowId`) pertenecen, qué endpoint exige cuál y su alta en la base
+de datos. Por lo tanto, del lado del frontend:
+- **No** inventar ni proponer ids de permiso nuevos, **no** agregar filas a
+  [PERMISSIONS.md](PERMISSIONS.md) y **no** incluir permisos en las especificaciones que se le pasan
+  al backend. PERMISSIONS.md lo mantiene el backend; aquí solo se consulta.
+- Cuando el backend entregue el id de una acción, ponerle al botón que la dispara la directiva
+  `*appHasPermission="'MODULO.ACCION'"` (`shared/directives/has-permission.directive.ts`), para
+  ocultarlo si el usuario logueado no lo tiene. Si una acción nueva todavía no tiene id del backend,
+  el botón queda sin directiva: el backend igual responde 403 si no hay permiso.
 
 No hace falta gatear con la directiva: cerrar un modal, "Cancelar" de un formulario, cambiar de
 tab, paginación, ni botones de solo lectura (ver detalle/historial) — el acceso a la ventana en sí
-ya cubre esos casos.
-
-**Cuando se cree un componente o ventana nueva con botones de acción**:
-1. Agregar la fila correspondiente a la tabla de [PERMISSIONS.md](PERMISSIONS.md) (id, ventana,
-   ruta, componente, acción, disparador), con la acción en español tal como debe verse en pantalla
-   (ej. "Crear usuario") — el backend usa ese texto como `IPermission.name` al dar de alta el
-   permiso, así que no hace falta traducirlo ni duplicarlo en el frontend.
-2. Avisar para pasarle esos ids nuevos al backend, junto con el `windowId` de la ventana a la que
-   pertenecen (`NavigationRoute.windowId`, ej. `"win-users"`) — ahí se generan los permisos
-   correspondientes, ya con `name` en español y `windowId` vinculado, y se agregan a la base de
-   datos. `RoleListComponent` empareja acción↔ruta por `windowId`, nunca por `windowName` (texto
-   libre, no hay garantía de que calce).
+ya cubre esos casos. `RoleListComponent` empareja acción↔ruta por `windowId`, nunca por
+`windowName` (texto libre, no hay garantía de que calce).
 
 Un botón con `*appHasPermission` apuntando a un id que el backend todavía no conoce simplemente se
 comporta como si nadie (salvo admin de sistema) lo tuviera — no rompe nada, pero tampoco sirve

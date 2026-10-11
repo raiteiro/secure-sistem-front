@@ -5,17 +5,41 @@
     <i class="pi pi-box header-icon"></i>
     <div><h2>Productos</h2><span class="subtitle">Catálogo de productos</span></div>
   </div>
-  <button class="btn-primary" *appHasPermission="'PRODUCTS.CREATE'" (click)="onCreate()"><i class="pi pi-plus"></i> Nuevo producto</button>
+  <button class="btn-primary" *appHasPermission="'PRODUCTS.CREATE'" (click)="onCreate()"><i class="pi pi-plus"></i> Nuevo producto o insumo</button>
+</div>
+
+<div class="kind-filter" role="tablist" aria-label="Filtrar por tipo">
+  <button type="button" role="tab" [class.active]="kindFilter() === null" [attr.aria-selected]="kindFilter() === null" (click)="kindFilter.set(null)">Todos</button>
+  <button type="button" role="tab" [class.active]="kindFilter() === 'Product'" [attr.aria-selected]="kindFilter() === 'Product'" (click)="kindFilter.set('Product')">Productos</button>
+  <button type="button" role="tab" [class.active]="kindFilter() === 'Supply'" [attr.aria-selected]="kindFilter() === 'Supply'" (click)="kindFilter.set('Supply')">Insumos</button>
 </div>
 
 <!-- MODAL: Crear/Editar Producto -->
 <p-dialog [(visible)]="showModal" [modal]="true" [draggable]="false" [resizable]="false"
   [style]="{ width: '520px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
   <div class="rm-header">
-    <div class="rm-title"><i class="pi" [class.pi-plus-circle]="!isEdit()" [class.pi-pencil]="isEdit()"></i> {{ isEdit() ? 'Editar Producto' : 'Nuevo Producto' }}</div>
+    <div class="rm-title"><i class="pi" [class.pi-plus-circle]="!isEdit()" [class.pi-pencil]="isEdit()"></i> {{ isEdit() ? (form.kind === 'Supply' ? 'Editar insumo' : 'Editar producto') : (form.kind === 'Supply' ? 'Nuevo insumo' : 'Nuevo producto') }}</div>
     <button class="rm-close" (click)="showModal = false"><i class="pi pi-times"></i></button>
   </div>
   <div class="rm-body">
+    <div class="rm-field-single">
+      <label>Tipo</label>
+      <div class="kind-switch" role="radiogroup" aria-label="Tipo de artículo">
+        <button type="button" role="radio" [class.active]="form.kind === 'Product'" [attr.aria-checked]="form.kind === 'Product'"
+          [disabled]="editIsManufactured" (click)="form.kind = 'Product'; onKindChange()">
+          <i class="pi pi-box"></i> Producto
+        </button>
+        <button type="button" role="radio" [class.active]="form.kind === 'Supply'" [attr.aria-checked]="form.kind === 'Supply'"
+          [disabled]="editIsManufactured" (click)="form.kind = 'Supply'; onKindChange()">
+          <i class="pi pi-inbox"></i> Insumo
+        </button>
+      </div>
+      @if (editIsManufactured) {
+        <span class="kind-hint">Producto fabricado: su receta se edita desde el almacén (botón "Crear producto").</span>
+      } @else if (form.kind === 'Supply') {
+        <span class="kind-hint">Un insumo no se vende: se compra, se guarda en almacén y se usa para fabricar productos.</span>
+      }
+    </div>
     <div class="rm-row">
       <div class="rm-field">
         <label>Nombre *</label>
@@ -56,7 +80,7 @@
     }
     <div class="rm-row">
       <div class="rm-field">
-        <label>Precio *</label>
+        <label>{{ form.kind === 'Supply' ? 'Precio (opcional)' : 'Precio *' }}</label>
         <input type="number" [(ngModel)]="form.price" min="0" step="any" placeholder="ej: 100.00" />
       </div>
       <div class="rm-field">
@@ -75,8 +99,13 @@
     }
     <div class="rm-row">
       <div class="rm-field">
-        <label>Unidad</label>
-        <input type="text" [(ngModel)]="form.unit" placeholder="ej: pz" />
+        <label for="product-unit">Unidad *</label>
+        <select id="product-unit" [(ngModel)]="form.unitId">
+          <option [ngValue]="null">Selecciona una unidad</option>
+          @for (unit of availableUnits(); track unit.id) {
+            <option [ngValue]="unit.id">{{ unit.name }} ({{ unit.abbreviation }}){{ unit.decimalPlaces === 0 ? ' · enteros' : ' · ' + unit.decimalPlaces + ' dec.' }}</option>
+          }
+        </select>
       </div>
       <div class="rm-field">
         <label>Impuesto</label>
@@ -97,13 +126,15 @@
         }
       </select>
     </div>
-    <div class="rm-switch-row">
-      <span class="rm-switch-label">Es un combo/kit</span>
-      <label class="rm-toggle">
-        <input type="checkbox" [(ngModel)]="form.isCombo" />
-        <span class="rm-slider"></span>
-      </label>
-    </div>
+    @if (form.kind === 'Product' && !editIsManufactured) {
+      <div class="rm-switch-row">
+        <span class="rm-switch-label">Es un combo/kit</span>
+        <label class="rm-toggle">
+          <input type="checkbox" [(ngModel)]="form.isCombo" aria-label="Es un combo/kit" />
+          <span class="rm-slider"></span>
+        </label>
+      </div>
+    }
     @if (!isEdit() && authService.isSystemAdmin()) {
       <div class="rm-field-single">
         <label>Empresa</label>
@@ -163,7 +194,7 @@
       </div>
       <div class="rm-field">
         <label>Cantidad</label>
-        <input type="number" [(ngModel)]="comboAddQuantity" min="1" step="any" placeholder="ej: 1" />
+        <input type="number" [(ngModel)]="comboAddQuantity" min="0" [step]="comboAddStep()" placeholder="ej: 1" />
       </div>
     </div>
     <button class="btn-secondary" (click)="onAddComboItem()"><i class="pi pi-plus"></i> Agregar componente</button>
@@ -224,7 +255,7 @@
             (input)="dt.filterGlobal($any($event.target).value, 'contains')"
           />
         </div>
-        <span class="product-count">{{ group.products.length }} producto(s)</span>
+        <span class="product-count">{{ group.products.length }} artículo(s)</span>
       </div>
 
       <p-table #dt [value]="group.products" [loading]="loading()" [rowHover]="true"
@@ -234,6 +265,7 @@
             <th style="width: 48px"></th>
             <th pSortableColumn="name">Nombre <p-sortIcon field="name" /></th>
             <th>SKU</th>
+            <th>Unidad</th>
             <th>Categoría</th>
             <th style="text-align: right">Precio</th>
             <th>Impuesto</th>
@@ -252,11 +284,14 @@
             <td>
               <span class="product-name">{{ product.name }}</span>
               @if (product.isCombo) { <span class="combo-badge" title="Combo/kit">Combo</span> }
+              @if (product.kind === 'Supply') { <span class="supply-badge" title="Insumo: no se vende, se usa para fabricar">Insumo</span> }
+              @if (product.isManufactured) { <span class="manufactured-badge" title="Se fabrica con insumos en almacén">Fabricado</span> }
               @if (product.supplierIsConsignor) { <span class="consignor-badge" [title]="'Consignado por ' + product.supplierName">Consignación</span> }
             </td>
             <td><span class="product-sku">{{ product.sku || '—' }}</span></td>
+            <td [title]="product.unitName">{{ product.unitAbbreviation }}</td>
             <td>{{ product.categoryName || '—' }}</td>
-            <td style="text-align: right">{{ product.price | number: '1.2-2' }}</td>
+            <td style="text-align: right">{{ product.kind === 'Supply' ? '—' : (product.price | number: '1.2-2') }}</td>
             <td>{{ product.taxRateName || '—' }}</td>
             <td>
               <div class="actions-cell">
@@ -270,7 +305,7 @@
           </tr>
         </ng-template>
         <ng-template pTemplate="emptymessage">
-          <tr><td colspan="7"><div class="empty-state"><i class="pi pi-box"></i><p>No hay productos configurados</p></div></td></tr>
+          <tr><td colspan="8"><div class="empty-state"><i class="pi pi-box"></i><p>No hay productos configurados</p></div></td></tr>
         </ng-template>
       </p-table>
     </div>

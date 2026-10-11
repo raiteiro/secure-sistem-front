@@ -6,6 +6,7 @@ import { TableModule } from 'primeng/table';
 import { DialogModule } from 'primeng/dialog';
 import { HasPermissionDirective } from '../../../../shared/directives/has-permission.directive';
 import { PagerComponent } from '../../../../shared/components/pager/pager.component';
+import { ComboAvailabilityTableComponent } from '../../../inventory/components/combo-availability-table/combo-availability-table.component';
 import { WarehousesService } from '../../services/warehouses.service';
 import { InventoryService } from '../../../inventory/services/inventory.service';
 import { InventoryMovementsService } from '../../../inventory/services/inventory-movements.service';
@@ -14,28 +15,41 @@ import { CompaniesService } from '../../../companies/services/companies.service'
 import { AuthService } from '../../../../core/services/auth.service';
 import { IWarehouse } from '../../../../core/models/warehouse.models';
 import {
+  IComboAvailability,
   IInventoryItem,
   IInventoryMovement,
   IInventoryMovementRequest,
-  InventoryMovementType
+  ManualInventoryMovementType
 } from '../../../../core/models/inventory.models';
-import { IProduct } from '../../../../core/models/product.models';
-import { signedMovementQuantity } from '../../../../core/utils/inventory-movement.util';
+import { IProduct, ProductKind } from '../../../../core/models/product.models';
+import {
+  INVENTORY_MOVEMENT_TYPE_LABELS,
+  signedMovementQuantity
+} from '../../../../core/utils/inventory-movement.util';
 import { NotificationService } from '../../../../core/services/notification.service';
+import { quantityDecimalsError, quantityStep } from '../../../../core/utils/quantity.util';
+import { ProduceDialogComponent } from '../produce-dialog/produce-dialog.component';
+import { DisassembleDialogComponent } from '../disassemble-dialog/disassemble-dialog.component';
+import { ProductionHistoryComponent } from '../production-history/production-history.component';
 
-const MOVEMENT_TYPE_LABELS: Record<InventoryMovementType, string> = {
-  In: 'Entrada',
-  Out: 'Salida',
-  Adjustment: 'Ajuste',
-  Purchase: 'Compra',
-  Sale: 'Venta',
-  Return: 'Devolución'
-};
+/** Pestañas del detalle: stock de productos (con combos), stock de insumos, e historial de producción */
+type WarehouseTab = 'products' | 'supplies' | 'production';
 
 @Component({
   selector: 'app-warehouse-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, TableModule, DialogModule, HasPermissionDirective, PagerComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TableModule,
+    DialogModule,
+    HasPermissionDirective,
+    PagerComponent,
+    ComboAvailabilityTableComponent,
+    ProduceDialogComponent,
+    DisassembleDialogComponent,
+    ProductionHistoryComponent
+  ],
   templateUrl: './warehouse-detail.component.html',
   styleUrl: './warehouse-detail.component.scss'
 })
@@ -50,9 +64,11 @@ export class WarehouseDetailComponent implements OnInit {
   private readonly notify = inject(NotificationService);
   readonly authService = inject(AuthService);
 
-  readonly movementTypeLabels = MOVEMENT_TYPE_LABELS;
+  readonly movementTypeLabels = INVENTORY_MOVEMENT_TYPE_LABELS;
 
-  private readonly warehouseId = Number(this.route.snapshot.paramMap.get('id'));
+  readonly warehouseId = Number(this.route.snapshot.paramMap.get('id'));
+
+  activeTab = signal<WarehouseTab>('products');
 
   warehouse = signal<IWarehouse | null>(null);
   loadingWarehouse = signal(true);
@@ -61,15 +77,75 @@ export class WarehouseDetailComponent implements OnInit {
   items = signal<IInventoryItem[]>([]);
   loadingItems = signal(true);
 
+  combos = signal<IComboAvailability[]>([]);
+  loadingCombos = signal(true);
+
   allProducts = signal<IProduct[]>([]);
 
   ngOnInit(): void {
     this.loadWarehouse();
     this.loadItems();
+    this.loadProducts();
+  }
+
+  private loadProducts(): void {
     this.productsService.getAll().subscribe({
       next: (data) => this.allProducts.set(data),
       error: () => this.notify.error('No se pudieron cargar los productos')
     });
+  }
+
+  /** Filas de la pestaña activa: productos (incluye fabricados) o insumos */
+  readonly visibleItems = computed<IInventoryItem[]>(() => {
+    const kind: ProductKind = this.activeTab() === 'supplies' ? 'Supply' : 'Product';
+    return this.items().filter((i) => i.productKind === kind);
+  });
+
+  readonly productCount = computed(() => this.items().filter((i) => i.productKind === 'Product').length);
+  readonly supplyCount = computed(() => this.items().filter((i) => i.productKind === 'Supply').length);
+
+  /** Insumos activos de la empresa del almacén, para las recetas */
+  readonly companySupplies = computed<IProduct[]>(() => {
+    const companyId = this.warehouse()?.companyId;
+    return this.allProducts().filter((p) => p.kind === 'Supply' && p.isActive && (!companyId || p.companyId === companyId));
+  });
+
+  /** Stock de cada insumo en este almacén, por productId */
+  readonly supplyStock = computed<Record<number, number>>(() => {
+    const stock: Record<number, number> = {};
+    for (const item of this.items()) {
+      if (item.productKind === 'Supply') stock[item.productId] = item.quantity;
+    }
+    return stock;
+  });
+
+  /** `step` del input de cantidad al agregar: el de la unidad del producto elegido */
+  addStep(): number {
+    return quantityStep(this.allProducts().find((p) => p.id === this.addForm.productId)?.unitDecimalPlaces);
+  }
+
+  /** `step` de un input de cantidad sobre una fila de inventario (movimiento, stock mínimo) */
+  itemStep(item: IInventoryItem | null): number {
+    return quantityStep(item?.unitDecimalPlaces);
+  }
+
+  selectTab(tab: WarehouseTab): void {
+    this.activeTab.set(tab);
+  }
+
+  // ===== Producción: fabricar / separar =====
+  showProduceDialog = signal(false);
+  disassembleItem = signal<IInventoryItem | null>(null);
+  /** Se incrementa para que el historial de producción recargue */
+  productionRefreshKey = signal(0);
+
+  /** Tras fabricar, separar, dar de alta un fabricado o editar una receta */
+  onProductionChanged(): void {
+    this.showProduceDialog.set(false);
+    this.disassembleItem.set(null);
+    this.loadItems();
+    this.loadProducts();
+    this.productionRefreshKey.update((k) => k + 1);
   }
 
   private loadWarehouse(): void {
@@ -98,18 +174,38 @@ export class WarehouseDetailComponent implements OnInit {
       next: (data) => { this.items.set(data); this.loadingItems.set(false); },
       error: () => { this.notify.error('No se pudo cargar el inventario del almacén'); this.loadingItems.set(false); }
     });
+    // Cualquier cambio de stock de un componente cambia cuántos combos se pueden vender
+    this.loadCombos();
+  }
+
+  private loadCombos(): void {
+    this.loadingCombos.set(true);
+    this.inventoryService.getComboAvailability({ warehouseId: this.warehouseId }).subscribe({
+      next: (data) => { this.combos.set(data); this.loadingCombos.set(false); },
+      error: () => { this.notify.error('No se pudo calcular la disponibilidad de combos'); this.loadingCombos.set(false); }
+    });
   }
 
   goBack(): void {
     this.router.navigate(['/catalogo/almacenes']);
   }
 
-  /** Productos activos de la empresa que todavía no tienen registro de inventario en este almacén */
+  /**
+   * Productos (o insumos, según la pestaña) activos de la empresa que todavía no tienen registro de
+   * inventario en este almacén. Sin combos: no llevan stock propio (el backend rechaza el
+   * movimiento), su disponibilidad sale de sus componentes — ver la tabla de combos.
+   */
   readonly availableProductsToAdd = computed<IProduct[]>(() => {
     const companyId = this.warehouse()?.companyId;
+    const kind: ProductKind = this.activeTab() === 'supplies' ? 'Supply' : 'Product';
     const stockedProductIds = new Set(this.items().map((i) => i.productId));
     return this.allProducts().filter(
-      (p) => p.isActive && (!companyId || p.companyId === companyId) && !stockedProductIds.has(p.id)
+      (p) =>
+        p.isActive &&
+        !p.isCombo &&
+        p.kind === kind &&
+        (!companyId || p.companyId === companyId) &&
+        !stockedProductIds.has(p.id)
     );
   });
 
@@ -144,6 +240,14 @@ export class WarehouseDetailComponent implements OnInit {
       this.notify.warn('Ingresa una cantidad mayor a cero');
       return;
     }
+    const product = this.allProducts().find((p) => p.id === this.addForm.productId);
+    const decimalsError = product
+      ? quantityDecimalsError(this.addForm.quantity, product.unitDecimalPlaces, product.name, product.unitName)
+      : null;
+    if (decimalsError) {
+      this.notify.warn(decimalsError);
+      return;
+    }
 
     const request: IInventoryMovementRequest = {
       productId: this.addForm.productId,
@@ -158,7 +262,7 @@ export class WarehouseDetailComponent implements OnInit {
       next: () => {
         this.savingAdd.set(false);
         this.showAddModal = false;
-        this.notify.success('Producto agregado al almacén');
+        this.notify.success(this.activeTab() === 'supplies' ? 'Insumo agregado al almacén' : 'Producto agregado al almacén');
         this.loadItems();
       },
       error: (e) => { this.savingAdd.set(false); this.notify.httpError(e); }
@@ -183,6 +287,14 @@ export class WarehouseDetailComponent implements OnInit {
       this.notify.warn('Ingresa un stock mínimo válido');
       return;
     }
+    if (this.minStockForm.hasMinStock && this.minStockForm.minStock !== null) {
+      const item = this.minStockItem;
+      const decimalsError = quantityDecimalsError(this.minStockForm.minStock, item.unitDecimalPlaces, item.productName);
+      if (decimalsError) {
+        this.notify.warn(decimalsError);
+        return;
+      }
+    }
 
     this.savingMinStock.set(true);
     const minStock = this.minStockForm.hasMinStock ? this.minStockForm.minStock : null;
@@ -201,7 +313,7 @@ export class WarehouseDetailComponent implements OnInit {
   showMovementModal = false;
   savingMovement = signal(false);
   movementItem: IInventoryItem | null = null;
-  movementForm: { type: InventoryMovementType; quantity: number | null; direction: 'increase' | 'decrease'; notes: string } = {
+  movementForm: { type: ManualInventoryMovementType; quantity: number | null; direction: 'increase' | 'decrease'; notes: string } = {
     type: 'In',
     quantity: null,
     direction: 'increase',
@@ -219,6 +331,11 @@ export class WarehouseDetailComponent implements OnInit {
     const magnitude = this.movementForm.quantity;
     if (magnitude === null || magnitude <= 0) {
       this.notify.warn('Ingresa una cantidad mayor a cero');
+      return;
+    }
+    const decimalsError = quantityDecimalsError(magnitude, this.movementItem.unitDecimalPlaces, this.movementItem.productName);
+    if (decimalsError) {
+      this.notify.warn(decimalsError);
       return;
     }
 
