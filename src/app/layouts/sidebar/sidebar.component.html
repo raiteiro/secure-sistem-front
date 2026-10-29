@@ -2,7 +2,22 @@
   <!-- Header -->
   <div class="sidebar-header">
     @if (!collapsed()) {
-      <span class="sidebar-brand" [title]="authService.currentUser()?.companyName || 'Sistema de Gestión'">{{ authService.currentUser()?.companyName || 'Sistema de Gestión' }}</span>
+      @if (myCompanies().length > 1) {
+        <select
+          class="sidebar-company-select"
+          [ngModel]="authService.currentUser()?.companyId"
+          (ngModelChange)="onSwitchCompany($event)"
+          [disabled]="switchingCompany()"
+          [title]="authService.currentUser()?.companyName || 'Sistema de Gestión'"
+          aria-label="Cambiar de empresa"
+        >
+          @for (option of myCompanies(); track option.companyId) {
+            <option [ngValue]="option.companyId">{{ option.companyName }}</option>
+          }
+        </select>
+      } @else {
+        <span class="sidebar-brand" [title]="authService.currentUser()?.companyName || 'Sistema de Gestión'">{{ authService.currentUser()?.companyName || 'Sistema de Gestión' }}</span>
+      }
     }
     <button class="toggle-btn" (click)="toggleSidebar()" [attr.aria-label]="collapsed() ? 'Expandir menú' : 'Colapsar menú'">
       <i class="pi" [class.pi-angle-left]="!collapsed()" [class.pi-angle-right]="collapsed()"></i>

@@ -99,7 +99,8 @@ Administración
 │   ├── USERS.EDIT                   Editar (ícono lápiz por fila)
 │   ├── USERS.DEACTIVATE             Desactivar (ícono basura por fila)
 │   ├── USERS.RESET_PASSWORD         Restablecer contraseña (ícono por fila)
-│   └── USERS.REASSIGN_COMPANY       Cambiar de empresa (ícono por fila)
+│   ├── USERS.REASSIGN_COMPANY       Cambiar de empresa (ícono por fila)
+│   └── USERS.MANAGE_COMPANY_ACCESS  Asignar acceso entre empresas (ícono por fila)
 │
 ├── Rutas de Navegación              /admin/routes           RouteListComponent
 │   ├── NAV_ROUTES.CREATE            Nueva ruta (+ variante "nueva en esta empresa")
@@ -133,7 +134,8 @@ Catálogo
 │   └── Detalle de almacén           /catalogo/almacenes/:id  WarehouseDetailComponent
 │       ├── WAREHOUSES.ADD_PRODUCT       Agregar producto (alta con entrada inicial)
 │       ├── WAREHOUSES.EDIT_MIN_STOCK    Editar stock mínimo (ícono campana por fila)
-│       └── WAREHOUSES.REGISTER_MOVEMENT Registrar movimiento (ícono flechas por fila)
+│       ├── WAREHOUSES.REGISTER_MOVEMENT Registrar movimiento (ícono flechas por fila)
+│       └── WAREHOUSES.TRANSFER          Transferir stock a otro almacén de la misma empresa
 │
 ├── Inventario                       /catalogo/inventario     InventoryListComponent
 │   └── (sin acciones de negocio — solo lectura: ver historial, filtro de stock bajo)
@@ -201,6 +203,7 @@ Consignaciones                        /consignaciones         ConsignmentListCom
 | `USERS.DEACTIVATE` | Usuarios | `/admin/users` | `UserListComponent` | Desactivar usuario | Ícono basura por fila |
 | `USERS.RESET_PASSWORD` | Usuarios | `/admin/users` | `UserListComponent` | Restablecer contraseña | Ícono "reset" por fila |
 | `USERS.REASSIGN_COMPANY` | Usuarios | `/admin/users` | `UserListComponent` | Cambiar de empresa | Ícono "mover" por fila |
+| `USERS.MANAGE_COMPANY_ACCESS` | Usuarios | `/admin/users` | `UserListComponent` | Asignar acceso entre empresas | Ícono "empresas" por fila |
 | `NAV_ROUTES.CREATE` | Rutas de Navegación | `/admin/routes` | `RouteListComponent` | Crear ruta | Botón "Nueva ruta" / `group-add-btn` |
 | `NAV_ROUTES.EDIT` | Rutas de Navegación | `/admin/routes` | `RouteListComponent` | Editar ruta | Ícono lápiz por fila |
 | `NAV_ROUTES.DEACTIVATE` | Rutas de Navegación | `/admin/routes` | `RouteListComponent` | Desactivar ruta | Ícono basura por fila |
@@ -222,6 +225,7 @@ Consignaciones                        /consignaciones         ConsignmentListCom
 | `WAREHOUSES.ADD_PRODUCT` | Almacenes (detalle) | `/catalogo/almacenes/:id` | `WarehouseDetailComponent` | Agregar producto al almacén | Botón "Agregar producto" |
 | `WAREHOUSES.EDIT_MIN_STOCK` | Almacenes (detalle) | `/catalogo/almacenes/:id` | `WarehouseDetailComponent` | Editar stock mínimo | Ícono campana por fila |
 | `WAREHOUSES.REGISTER_MOVEMENT` | Almacenes (detalle) | `/catalogo/almacenes/:id` | `WarehouseDetailComponent` | Registrar movimiento de inventario | Ícono flechas por fila |
+| `WAREHOUSES.TRANSFER` | Almacenes (detalle) | `/catalogo/almacenes/:id` | `WarehouseDetailComponent` | Transferir stock a otro almacén de la misma empresa | Botón "Transferir" |
 | `TAX_RATES.CREATE` | Impuestos | `/catalogo/impuestos` | `TaxRateListComponent` | Crear impuesto | Botón "Nuevo impuesto" / `group-add-btn` |
 | `TAX_RATES.EDIT` | Impuestos | `/catalogo/impuestos` | `TaxRateListComponent` | Editar impuesto | Ícono lápiz por fila |
 | `TAX_RATES.DEACTIVATE` | Impuestos | `/catalogo/impuestos` | `TaxRateListComponent` | Desactivar impuesto | Ícono basura por fila |

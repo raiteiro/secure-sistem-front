@@ -8,6 +8,7 @@ import { HasPermissionDirective } from '../../../../shared/directives/has-permis
 import { PagerComponent } from '../../../../shared/components/pager/pager.component';
 import { ComboAvailabilityTableComponent } from '../../../inventory/components/combo-availability-table/combo-availability-table.component';
 import { WarehousesService } from '../../services/warehouses.service';
+import { StockTransfersService } from '../../services/stock-transfers.service';
 import { InventoryService } from '../../../inventory/services/inventory.service';
 import { InventoryMovementsService } from '../../../inventory/services/inventory-movements.service';
 import { ProductsService } from '../../../products/services/products.service';
@@ -22,6 +23,7 @@ import {
   ManualInventoryMovementType
 } from '../../../../core/models/inventory.models';
 import { IProduct, ProductKind } from '../../../../core/models/product.models';
+import { ICreateStockTransferRequest } from '../../../../core/models/stock-transfer.models';
 import {
   INVENTORY_MOVEMENT_TYPE_LABELS,
   signedMovementQuantity
@@ -57,6 +59,7 @@ export class WarehouseDetailComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly warehousesService = inject(WarehousesService);
+  private readonly stockTransfersService = inject(StockTransfersService);
   private readonly inventoryService = inject(InventoryService);
   private readonly movementsService = inject(InventoryMovementsService);
   private readonly productsService = inject(ProductsService);
@@ -81,12 +84,27 @@ export class WarehouseDetailComponent implements OnInit {
   loadingCombos = signal(true);
 
   allProducts = signal<IProduct[]>([]);
+  allWarehouses = signal<IWarehouse[]>([]);
 
   ngOnInit(): void {
     this.loadWarehouse();
     this.loadItems();
     this.loadProducts();
+    this.loadWarehouses();
   }
+
+  private loadWarehouses(): void {
+    this.warehousesService.getAll().subscribe({
+      next: (data) => this.allWarehouses.set(data),
+      error: () => this.notify.error('No se pudieron cargar los almacenes')
+    });
+  }
+
+  /** Otros almacenes activos de la misma empresa — destinos válidos para un traspaso */
+  readonly otherWarehouses = computed<IWarehouse[]>(() => {
+    const companyId = this.warehouse()?.companyId;
+    return this.allWarehouses().filter((w) => w.id !== this.warehouseId && (!companyId || w.companyId === companyId));
+  });
 
   private loadProducts(): void {
     this.productsService.getAll().subscribe({
@@ -362,6 +380,63 @@ export class WarehouseDetailComponent implements OnInit {
         this.loadItems();
       },
       error: (e) => { this.savingMovement.set(false); this.notify.httpError(e); }
+    });
+  }
+
+  // ===== Modal: transferir a otro almacén =====
+  showTransferModal = false;
+  savingTransfer = signal(false);
+  transferItem: IInventoryItem | null = null;
+  transferForm: { destinationWarehouseId: number | null; quantity: number | null; notes: string } = {
+    destinationWarehouseId: null,
+    quantity: null,
+    notes: ''
+  };
+
+  onTransfer(item: IInventoryItem): void {
+    this.transferItem = item;
+    this.transferForm = { destinationWarehouseId: null, quantity: null, notes: '' };
+    this.showTransferModal = true;
+  }
+
+  onSaveTransfer(): void {
+    if (!this.transferItem) return;
+    if (!this.transferForm.destinationWarehouseId) {
+      this.notify.warn('Selecciona el almacén de destino');
+      return;
+    }
+    const quantity = this.transferForm.quantity;
+    if (quantity === null || quantity <= 0) {
+      this.notify.warn('Ingresa una cantidad mayor a cero');
+      return;
+    }
+    const decimalsError = quantityDecimalsError(quantity, this.transferItem.unitDecimalPlaces, this.transferItem.productName);
+    if (decimalsError) {
+      this.notify.warn(decimalsError);
+      return;
+    }
+    if (quantity > this.transferItem.quantity) {
+      this.notify.warn(`Solo hay ${this.transferItem.quantity} de "${this.transferItem.productName}" disponibles en este almacén`);
+      return;
+    }
+
+    const request: ICreateStockTransferRequest = {
+      productId: this.transferItem.productId,
+      sourceWarehouseId: this.transferItem.warehouseId,
+      destinationWarehouseId: this.transferForm.destinationWarehouseId,
+      quantity,
+      notes: this.transferForm.notes || null
+    };
+
+    this.savingTransfer.set(true);
+    this.stockTransfersService.create(request).subscribe({
+      next: (transfer) => {
+        this.savingTransfer.set(false);
+        this.showTransferModal = false;
+        this.notify.success(`Traspaso #${transfer.folioNumber} registrado`);
+        this.loadItems();
+      },
+      error: (e) => { this.savingTransfer.set(false); this.notify.httpError(e); }
     });
   }
 

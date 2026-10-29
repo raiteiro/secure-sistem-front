@@ -7,7 +7,9 @@ import {
   ICreateUserRequest,
   IUpdateUserRequest,
   IReassignCompanyRequest,
-  IResetUserPasswordResponse
+  IResetUserPasswordResponse,
+  IUserCompanyAccess,
+  ISetUserCompanyAccessRequest
 } from '../../../core/models/user.models';
 import { IPageFilters, IPagedResult } from '../../../core/models/pagination.models';
 import { MAX_PAGE_SIZE, fetchAllPages } from '../../../core/utils/fetch-all-pages.util';
@@ -52,5 +54,15 @@ export class UsersService {
 
   resetPassword(id: number): Observable<IResetUserPasswordResponse> {
     return this.http.post<IResetUserPasswordResponse>(`${this.apiUrl}/${id}/reset-password`, {});
+  }
+
+  /** Empresas adicionales asignadas al usuario + si puede cambiar entre ellas (solo admin de sistema) */
+  getCompanyAccess(id: number): Observable<IUserCompanyAccess> {
+    return this.http.get<IUserCompanyAccess>(`${this.apiUrl}/${id}/company-access`);
+  }
+
+  /** Reemplaza el flag y la lista completa de empresas adicionales asignadas (solo admin de sistema) */
+  setCompanyAccess(id: number, request: ISetUserCompanyAccessRequest): Observable<IUserCompanyAccess> {
+    return this.http.post<IUserCompanyAccess>(`${this.apiUrl}/${id}/company-access`, request);
   }
 }

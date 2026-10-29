@@ -1,6 +1,7 @@
 import { IPageFilters } from './pagination.models';
 
-export type PaymentMethod = 'Cash' | 'Card' | 'Other';
+/** 'Card' ya no se ofrece en el selector de métodos de pago, pero sigue siendo válida para mostrar ventas/devoluciones antiguas registradas antes de separar débito/crédito. */
+export type PaymentMethod = 'Cash' | 'Debit' | 'Credit' | 'Transfer' | 'Card' | 'Other';
 
 // ===== Request (POST /api/Sales) =====
 export interface ISaleItemRequest {
@@ -66,6 +67,9 @@ export interface ISale {
   cashSessionId: number;
   customerId: number | null;
   customerName: string | null;
+  userId: number;
+  /** El cajero que hizo la venta — mismo valor que createdBy */
+  username: string;
   status: string;
   subtotal: number;
   discountTotal: number;
@@ -75,6 +79,9 @@ export interface ISale {
   payments: ISalePayment[];
   createdAt: string;
   createdBy: string;
+  modifiedAt: string | null;
+  /** Quien canceló la venta — null si sigue 'Completed'. Puede ser distinto de username (ej. un supervisor autorizando la cancelación) */
+  modifiedBy: string | null;
 }
 
 /**

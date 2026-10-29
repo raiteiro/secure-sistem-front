@@ -27,6 +27,29 @@
   &:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(var(--brand-button-rgb), 0.35); }
 }
 
+.sale-data-bar {
+  display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center;
+  background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  padding: 0.625rem 1.25rem; margin-bottom: 1.25rem;
+  // Label a la izquierda del select (en vez de arriba) y controles más compactos, para que
+  // esta barra ocupe el mínimo alto posible — es solo contexto de la venta, no el foco de la pantalla.
+  .rm-field-single {
+    flex: 1 1 220px; margin-bottom: 0; flex-direction: row; align-items: center; gap: 0.625rem;
+    label { flex-shrink: 0; white-space: nowrap; }
+    select { padding: 0.4rem 0.625rem; font-size: 0.8125rem; }
+  }
+}
+
+.btn-close-session {
+  display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem;
+  border: none; border-radius: 10px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.18), rgba(0,0,0,0.15)), #dc2626;
+  font-size: 0.8125rem; font-weight: 700; color: #fff; cursor: pointer; white-space: nowrap;
+  margin-left: auto; box-shadow: 0 2px 10px rgba(220, 38, 38, 0.35);
+  transition: transform 0.15s, box-shadow 0.15s;
+  &:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(220, 38, 38, 0.45); }
+}
+
 .pos-layout { display: grid; grid-template-columns: 1fr 380px; gap: 1.25rem; align-items: start; }
 
 .pos-main { display: flex; flex-direction: column; gap: 1.25rem; min-width: 0; }
@@ -249,6 +272,7 @@
   background: #ecfdf5; color: #059669;
   &.cancelled { background: #fef2f2; color: #dc2626; }
 }
+.cancelled-by { display: block; margin-top: 0.1875rem; font-size: 0.6875rem; color: #9ca3af; }
 
 .actions-cell { display: flex; align-items: center; justify-content: center; gap: 0.375rem; }
 .action-btn {
@@ -271,12 +295,18 @@
 }
 .receipt-logo { display: block; max-width: 120px; max-height: 70px; margin: 0 auto 0.625rem; object-fit: contain; }
 .receipt-company { text-align: center; font-weight: 700; font-size: 0.9375rem; margin-bottom: 0.25rem !important; }
-.receipt-meta { text-align: center; color: #4a4a5a; line-height: 1.5; }
+.receipt-title { text-align: center; font-weight: 700; font-size: 0.875rem; letter-spacing: 0.6px; margin: 0.625rem 0 0 !important; }
+.receipt-meta { text-align: center; color: #4a4a5a; line-height: 1.5; strong { color: #1a1a2e; } }
 .receipt-divider { border-top: 1px dashed #d1d5db; margin: 0.75rem 0; }
 .receipt-items {
   width: 100%; border-collapse: collapse;
+  th { text-align: left; padding: 0 0 0.25rem; font-weight: 700; border-bottom: 1px solid #e5e7eb; }
+  th.receipt-amount { text-align: right; }
   td { padding: 0.2rem 0; }
 }
+.receipt-item-qty { width: 1.75rem; }
+.receipt-item-name { font-weight: 700; }
+.receipt-item-discount { color: #6b7280; font-size: 0.75rem; }
 .receipt-amount { text-align: right; }
 .receipt-totals {
   div { display: flex; justify-content: space-between; padding: 0.15rem 0; }
@@ -291,6 +321,7 @@
   &:hover { border-color: var(--brand-button); color: var(--brand-button); }
 }
 .receipt-email-field { margin-bottom: 0; }
+.receipt-size-field { margin-bottom: 0.875rem; }
 
 .empty-state {
   text-align: center; padding: 3rem;

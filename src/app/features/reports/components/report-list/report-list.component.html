@@ -15,6 +15,9 @@
   <button class="tab-btn" [class.active]="activeTab() === 'closeouts'" (click)="selectTab('closeouts')">
     <i class="pi pi-wallet"></i> Cortes de caja
   </button>
+  <button class="tab-btn" [class.active]="activeTab() === 'detail'" (click)="selectTab('detail')">
+    <i class="pi pi-list"></i> Detalle de ventas
+  </button>
 </div>
 
 <!-- ===== Ventas por periodo ===== -->
@@ -50,6 +53,7 @@
     <div class="table-card"><div class="empty-state"><i class="pi pi-spinner pi-spin"></i><p>Cargando reporte...</p></div></div>
   } @else {
     @if (salesReport(); as report) {
+      <div class="receipt-print-area print-landscape">
       <div class="stats-row">
         <div class="stat-card">
           <div class="stat-icon"><i class="pi pi-shopping-cart"></i></div>
@@ -64,6 +68,7 @@
       <div class="table-card">
         <div class="table-toolbar">
           <span class="result-count">{{ report.periods.length }} periodo(s) — {{ report.from }} a {{ report.to }}</span>
+          <button class="btn-mini-print" (click)="onPrint()"><i class="pi pi-print"></i> Imprimir</button>
         </div>
         <div class="table-scroll">
           @if (report.periods.length === 0) {
@@ -93,8 +98,8 @@
                     <td style="text-align: right">{{ row.salesCount | number: '1.0-0' }}</td>
                     <td style="text-align: right">{{ row.totalAmount | number: '1.2-2' }}</td>
                   </tr>
-                  @if (canExpandPeriod(row) && isPeriodExpanded(row.period)) {
-                    <tr class="expanded-detail-row">
+                  @if (canExpandPeriod(row)) {
+                    <tr class="expanded-detail-row" [class.collapsed]="!isPeriodExpanded(row.period)">
                       <td colspan="4">
                         <table class="nested-products-table">
                           <thead>
@@ -132,6 +137,7 @@
           }
         </div>
       </div>
+      </div>
     }
   }
 }
@@ -167,9 +173,11 @@
   } @else if (topProducts().length === 0) {
     <div class="table-card"><div class="empty-state"><i class="pi pi-star"></i><p>No hay productos vendidos en este rango</p></div></div>
   } @else {
+    <div class="receipt-print-area print-landscape">
     <div class="table-card">
       <div class="table-toolbar">
         <span class="result-count">{{ topProducts().length }} producto(s)</span>
+        <button class="btn-mini-print" (click)="onPrint()"><i class="pi pi-print"></i> Imprimir</button>
       </div>
       <div class="table-scroll">
         <table class="history-table">
@@ -202,6 +210,7 @@
           </tbody>
         </table>
       </div>
+    </div>
     </div>
   }
 }
@@ -242,9 +251,11 @@
   } @else if (closeouts().length === 0) {
     <div class="table-card"><div class="empty-state"><i class="pi pi-wallet"></i><p>No hay cortes de caja en este rango</p></div></div>
   } @else {
+    <div class="receipt-print-area print-landscape">
     <div class="table-card">
       <div class="table-toolbar">
         <span class="result-count">{{ closeouts().length }} corte(s)</span>
+        <button class="btn-mini-print" (click)="onPrint()"><i class="pi pi-print"></i> Imprimir</button>
       </div>
       <div class="table-scroll">
         <table class="history-table">
@@ -258,7 +269,10 @@
               <th style="text-align: right">Ventas</th>
               <th style="text-align: right">Apertura</th>
               <th style="text-align: right">Efectivo</th>
-              <th style="text-align: right">Tarjeta</th>
+              <th style="text-align: right">Débito</th>
+              <th style="text-align: right">Crédito</th>
+              <th style="text-align: right">Transferencia</th>
+              <th style="text-align: right">Tarjeta (ant.)</th>
               <th style="text-align: right">Otro</th>
               <th style="text-align: right">Devoluciones</th>
               <th style="text-align: right">Esperado</th>
@@ -277,6 +291,9 @@
                 <td style="text-align: right">{{ row.salesCount | number: '1.0-0' }}</td>
                 <td style="text-align: right">{{ row.openingAmount | number: '1.2-2' }}</td>
                 <td style="text-align: right">{{ row.cashSalesTotal | number: '1.2-2' }}</td>
+                <td style="text-align: right">{{ row.debitSalesTotal | number: '1.2-2' }}</td>
+                <td style="text-align: right">{{ row.creditSalesTotal | number: '1.2-2' }}</td>
+                <td style="text-align: right">{{ row.transferSalesTotal | number: '1.2-2' }}</td>
                 <td style="text-align: right">{{ row.cardSalesTotal | number: '1.2-2' }}</td>
                 <td style="text-align: right">{{ row.otherSalesTotal | number: '1.2-2' }}</td>
                 <td style="text-align: right">{{ row.refundsTotal | number: '1.2-2' }}</td>
@@ -291,5 +308,166 @@
         </table>
       </div>
     </div>
+    </div>
+  }
+}
+
+<!-- ===== Detalle de ventas ===== -->
+@if (activeTab() === 'detail') {
+  <div class="filters-bar">
+    <div class="filter-field">
+      <label>Desde</label>
+      <input type="date" class="filter-date" [(ngModel)]="detailFilters.from" (ngModelChange)="loadSalesDetail()" />
+    </div>
+    <div class="filter-field">
+      <label>Hasta</label>
+      <input type="date" class="filter-date" [(ngModel)]="detailFilters.to" (ngModelChange)="loadSalesDetail()" />
+    </div>
+    <div class="filter-field">
+      <label>Sucursal</label>
+      <select class="filter-select" [(ngModel)]="detailFilters.branchId" (ngModelChange)="loadSalesDetail()">
+        <option [ngValue]="null">Todas</option>
+        @for (branch of branches(); track branch.id) {
+          <option [ngValue]="branch.id">{{ branch.name }}</option>
+        }
+      </select>
+    </div>
+  </div>
+
+  @if (detailLoading()) {
+    <div class="table-card"><div class="empty-state"><i class="pi pi-spinner pi-spin"></i><p>Cargando reporte...</p></div></div>
+  } @else {
+    @if (salesDetail(); as d) {
+    <div class="receipt-print-area print-landscape">
+    <div class="table-card detail-report">
+      <div class="table-toolbar">
+        <span class="result-count">{{ d.from }} a {{ d.to }} — {{ d.transactionsCount }} venta(s)</span>
+        <button class="btn-mini-print" (click)="onPrint()"><i class="pi pi-print"></i> Imprimir</button>
+      </div>
+
+      <div class="detail-section">
+        <h4 class="detail-section-title">Ventas</h4>
+        @if (d.categories.length === 0) {
+          <div class="empty-state small"><i class="pi pi-chart-bar"></i><p>No hay ventas en este rango</p></div>
+        } @else {
+          <table class="detail-table">
+            <thead>
+              <tr><th>Concepto</th><th style="text-align: right">Cantidad</th><th style="text-align: right">Importe</th></tr>
+            </thead>
+            <tbody>
+              @for (cat of d.categories; track cat.categoryId) {
+                <tr class="detail-category-row">
+                  <td>{{ cat.categoryName }}</td>
+                  <td style="text-align: right">{{ cat.quantity | number: '1.0-4' }}</td>
+                  <td style="text-align: right">{{ cat.amount | number: '1.2-2' }}</td>
+                </tr>
+                @for (p of cat.products; track p.productId) {
+                  <tr class="detail-product-row">
+                    <td>{{ p.productName }}</td>
+                    <td style="text-align: right">{{ p.quantity | number: '1.0-4' }} Unidades</td>
+                    <td style="text-align: right">{{ p.amount | number: '1.2-2' }}</td>
+                  </tr>
+                }
+              }
+              <tr class="detail-total-row">
+                <td>Total</td>
+                <td style="text-align: right">{{ d.totalQuantity | number: '1.0-4' }}</td>
+                <td style="text-align: right">{{ d.totalAmount | number: '1.2-2' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        }
+      </div>
+
+      <div class="detail-section">
+        <h4 class="detail-section-title">Impuestos sobre las ventas</h4>
+        @if (d.taxes.length === 0) {
+          <p class="detail-empty-line">Sin impuestos registrados.</p>
+        } @else {
+          <table class="detail-table">
+            <thead>
+              <tr><th>Tasa</th><th style="text-align: right">Impuesto</th><th style="text-align: right">Importe</th></tr>
+            </thead>
+            <tbody>
+              @for (t of d.taxes; track t.label) {
+                <tr>
+                  <td>{{ t.label }}</td>
+                  <td style="text-align: right">{{ t.taxAmount | number: '1.2-2' }}</td>
+                  <td style="text-align: right">{{ t.amount | number: '1.2-2' }}</td>
+                </tr>
+              }
+              <tr class="detail-total-row">
+                <td>Total</td>
+                <td style="text-align: right">{{ taxesTotal(d.taxes) | number: '1.2-2' }}</td>
+                <td style="text-align: right">{{ d.totalAmount | number: '1.2-2' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        }
+      </div>
+
+      <div class="detail-section">
+        <h4 class="detail-section-title">Pagos</h4>
+        @if (d.payments.length === 0) {
+          <p class="detail-empty-line">Sin pagos registrados.</p>
+        } @else {
+          <table class="detail-table">
+            <thead>
+              <tr><th>Forma de pago</th><th style="text-align: right">Importe</th></tr>
+            </thead>
+            <tbody>
+              @for (p of d.payments; track p.method) {
+                <tr>
+                  <td>{{ paymentMethodLabels[p.method] || p.method }}</td>
+                  <td style="text-align: right">{{ p.amount | number: '1.2-2' }}</td>
+                </tr>
+              }
+              <tr class="detail-total-row">
+                <td>Total</td>
+                <td style="text-align: right">{{ d.paymentsTotal | number: '1.2-2' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        }
+      </div>
+
+      <div class="detail-section">
+        <h4 class="detail-section-title">Descuentos</h4>
+        <p class="detail-empty-line">Número de descuentos: {{ d.discountsCount }}</p>
+        <p class="detail-empty-line">Importe de los descuentos: {{ d.discountsTotal | number: '1.2-2' }}</p>
+      </div>
+
+      <div class="detail-section">
+        <h4 class="detail-section-title">Control de la sesión</h4>
+        <p class="detail-empty-line">Total: {{ d.totalAmount | number: '1.2-2' }} — Número de transacciones: {{ d.transactionsCount }}</p>
+        @if (d.sessions.length === 0) {
+          <p class="detail-empty-line">Sin turnos cerrados en este rango.</p>
+        } @else {
+          <table class="detail-table">
+            <thead>
+              <tr><th>Nombre</th><th style="text-align: right">Esperado</th><th style="text-align: right">Contado</th><th style="text-align: right">Diferencia</th></tr>
+            </thead>
+            <tbody>
+              @for (s of d.sessions; track $index) {
+                <tr>
+                  <td>{{ s.username }}</td>
+                  <td style="text-align: right">{{ s.expectedAmount !== null ? (s.expectedAmount | number: '1.2-2') : '—' }}</td>
+                  <td style="text-align: right">{{ s.closingAmount !== null ? (s.closingAmount | number: '1.2-2') : '—' }}</td>
+                  <td
+                    style="text-align: right"
+                    [class.positive]="(s.difference ?? 0) > 0"
+                    [class.negative]="(s.difference ?? 0) < 0"
+                  >
+                    {{ s.difference !== null ? (s.difference | number: '1.2-2') : '—' }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+    </div>
+    </div>
+    }
   }
 }

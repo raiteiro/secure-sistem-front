@@ -1,3 +1,5 @@
+import { PaymentMethod } from './sale.models';
+
 export type ReportGroupBy = 'day' | 'month';
 
 /** Query params opcionales de GET /api/reports/sales-by-period. Sin from/to → mes en curso a la fecha */
@@ -65,7 +67,9 @@ export interface ICashierCloseoutFilters {
 /**
  * Item de la respuesta de GET /api/reports/cashier-closeouts.
  * expectedAmount/closingAmount/difference son los mismos que calculó CashSessionsController.Close al cerrar el turno
- * (solo reconcilian efectivo); cardSalesTotal/otherSalesTotal son extra para ver el total real vendido por método.
+ * (solo reconcilian efectivo); debitSalesTotal/creditSalesTotal/transferSalesTotal/cardSalesTotal/otherSalesTotal son
+ * extra para ver el total real vendido por método. cardSalesTotal solo trae datos en cortes anteriores a separar
+ * débito/crédito — en cortes nuevos siempre es 0.
  */
 export interface ICashierCloseout {
   cashSessionId: number;
@@ -80,10 +84,77 @@ export interface ICashierCloseout {
   salesCount: number;
   openingAmount: number;
   cashSalesTotal: number;
+  debitSalesTotal: number;
+  creditSalesTotal: number;
+  transferSalesTotal: number;
   cardSalesTotal: number;
   otherSalesTotal: number;
   refundsTotal: number;
   expectedAmount: number;
   closingAmount: number;
   difference: number;
+}
+
+/** Query params opcionales de GET /api/reports/sales-detail. Sin from/to → mes en curso a la fecha */
+export interface ISalesDetailFilters {
+  from?: string;
+  to?: string;
+  branchId?: number;
+}
+
+export interface ISalesDetailProductRow {
+  productId: number;
+  productName: string;
+  quantity: number;
+  /** Total cobrado (subtotal + impuesto) */
+  amount: number;
+}
+
+export interface ISalesDetailCategoryGroup {
+  /** 0 = bucket sintético "Sin categoría" */
+  categoryId: number;
+  categoryName: string;
+  quantity: number;
+  amount: number;
+  products: ISalesDetailProductRow[];
+}
+
+export interface ISalesDetailTaxRow {
+  /** "Exento" si la tasa es 0, si no "16%" etc. */
+  label: string;
+  taxAmount: number;
+  amount: number;
+}
+
+export interface ISalesDetailPaymentRow {
+  method: PaymentMethod;
+  amount: number;
+}
+
+export interface ISalesDetailSessionRow {
+  username: string;
+  expectedAmount: number | null;
+  closingAmount: number | null;
+  difference: number | null;
+}
+
+/**
+ * Respuesta de GET /api/reports/sales-detail: reporte combinado — productos vendidos por
+ * categoría, desglose de impuestos, desglose por forma de pago, uso de descuentos y control
+ * de sesión (esperado/contado/diferencia por cajero cerrado en el rango).
+ */
+export interface ISalesDetailReport {
+  from: string;
+  to: string;
+  categories: ISalesDetailCategoryGroup[];
+  totalQuantity: number;
+  totalAmount: number;
+  /** Número de ventas (no de líneas) en el rango, excluyendo canceladas */
+  transactionsCount: number;
+  taxes: ISalesDetailTaxRow[];
+  payments: ISalesDetailPaymentRow[];
+  paymentsTotal: number;
+  discountsCount: number;
+  discountsTotal: number;
+  sessions: ISalesDetailSessionRow[];
 }

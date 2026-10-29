@@ -65,6 +65,7 @@
   &.movement { color: var(--brand-button); &:hover { background: rgba(var(--brand-button-rgb), 0.1); } }
   &.history { color: #6b7280; &:hover { background: rgba(107, 114, 128, 0.12); } }
   &.disassemble { color: #7c3aed; &:hover { background: rgba(124, 58, 237, 0.1); } }
+  &.transfer { color: #0891b2; &:hover { background: rgba(8, 145, 178, 0.1); } }
   &:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 }
 
@@ -148,6 +149,7 @@
   &.type-out, &.type-sale { background: #fef2f2; color: #dc2626; }
   &.type-adjustment { background: #eff6ff; color: #3b82f6; }
   &.type-production, &.type-disassembly { background: #f5f3ff; color: #7c3aed; }
+  &.type-transfer { background: #ecfeff; color: #0891b2; }
 }
 
 @media (max-width: 768px) { .page-header { flex-direction: column; align-items: flex-start; } }

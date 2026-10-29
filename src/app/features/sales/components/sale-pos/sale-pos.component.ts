@@ -5,11 +5,13 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { floorToAllowedDecimals, quantityDecimalsError, quantityStep } from '../../../../core/utils/quantity.util';
+import { PAYMENT_METHOD_LABELS } from '../../../../core/constants/payment-methods';
 import { ConfirmationService } from 'primeng/api';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { DialogModule } from 'primeng/dialog';
 import { HasPermissionDirective } from '../../../../shared/directives/has-permission.directive';
 import { PagerComponent } from '../../../../shared/components/pager/pager.component';
+import { CloseCashSessionDialogComponent } from '../../../../shared/components/close-cash-session-dialog/close-cash-session-dialog.component';
 import { SalesService } from '../../services/sales.service';
 import { ProductsService } from '../../../products/services/products.service';
 import { CashSessionsService } from '../../../cash-sessions/services/cash-sessions.service';
@@ -81,11 +83,15 @@ interface ICartLine {
   unitAbbreviation: string;
   unitDecimalPlaces: number;
   quantity: number;
-  discountAmount: number;
+  /** 0-100. El backend sigue recibiendo el descuento en pesos (ver onCreateSale) — este % es
+   * solo la forma en que se captura en el POS, para no depender de que el cajero calcule a mano
+   * cuánto es "15% de este producto" en pesos. */
+  discountPercent: number;
 }
 
 interface ICartLineComputed extends ICartLine {
   lineGross: number;
+  discountAmount: number;
   lineSubtotal: number;
   lineTax: number;
   lineTotal: number;
@@ -100,12 +106,6 @@ interface IPaymentLine {
   receivedCash: number | null;
 }
 
-const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
-  Cash: 'Efectivo',
-  Card: 'Tarjeta',
-  Other: 'Otro'
-};
-
 /** Un componente de combo y cuánto lleva por cada combo */
 interface IComboComponentUsage {
   productId: number;
@@ -119,7 +119,7 @@ function round2(value: number): number {
 @Component({
   selector: 'app-sale-pos',
   standalone: true,
-  imports: [CommonModule, FormsModule, DialogModule, ConfirmDialogModule, HasPermissionDirective, PagerComponent],
+  imports: [CommonModule, FormsModule, DialogModule, ConfirmDialogModule, HasPermissionDirective, PagerComponent, CloseCashSessionDialogComponent],
   providers: [ConfirmationService],
   templateUrl: './sale-pos.component.html',
   styleUrl: './sale-pos.component.scss'
@@ -373,7 +373,10 @@ export class SalePosComponent implements OnInit {
 
     const available: Record<number, number> = {};
     for (const product of this.products()) {
-      if (product.isCombo) {
+      if (!product.tracksStock) {
+        // Se vende sin necesidad de existencias: siempre "disponible", sin tope de stock.
+        available[product.id] = Number.MAX_SAFE_INTEGER;
+      } else if (product.isCombo) {
         const components = combos[product.id] ?? [];
         available[product.id] = components.length === 0
           ? 0
@@ -394,9 +397,13 @@ export class SalePosComponent implements OnInit {
   readonly cartStockIssues = computed<string[]>(() => {
     if (!this.stockWarehouseId()) return [];
     const stock = this.stockByProduct();
-    const names = new Map(this.products().map((p) => [p.id, p.name]));
+    const products = this.products();
+    const names = new Map(products.map((p) => [p.id, p.name]));
+    // Un producto base (no un combo) que no requiere existencias nunca es "problema de stock",
+    // aunque el carrito consuma más de lo que haya en Inventory (o no exista fila ahí).
+    const tracksStock = new Map(products.map((p) => [p.id, p.tracksStock]));
     return Object.entries(this.cartUsage())
-      .filter(([productId, used]) => used > (stock[Number(productId)] ?? 0))
+      .filter(([productId, used]) => tracksStock.get(Number(productId)) !== false && used > (stock[Number(productId)] ?? 0))
       .map(([productId]) => names.get(Number(productId)) ?? `#${productId}`);
   });
 
@@ -482,7 +489,7 @@ export class SalePosComponent implements OnInit {
         unitDecimalPlaces: product.unitDecimalPlaces,
         // Con stock fraccionario (ej. 0.5 kg) se agrega lo que haya
         quantity: Math.min(1, available),
-        discountAmount: 0
+        discountPercent: 0
       }
     ]);
   }
@@ -511,11 +518,10 @@ export class SalePosComponent implements OnInit {
     );
   }
 
-  updateDiscount(line: ICartLine, discountAmount: number): void {
-    const maxDiscount = round2(line.price * line.quantity);
-    const clamped = Math.min(Math.max(discountAmount || 0, 0), maxDiscount);
+  updateDiscount(line: ICartLine, discountPercent: number): void {
+    const clamped = Math.min(Math.max(discountPercent || 0, 0), 100);
     this.cartItems.update((lines) =>
-      lines.map((l) => (l.productId === line.productId ? { ...l, discountAmount: clamped } : l))
+      lines.map((l) => (l.productId === line.productId ? { ...l, discountPercent: clamped } : l))
     );
   }
 
@@ -526,10 +532,11 @@ export class SalePosComponent implements OnInit {
   readonly cartComputed = computed<ICartLineComputed[]>(() =>
     this.cartItems().map((line) => {
       const lineGross = round2(line.quantity * line.price);
-      const lineSubtotal = round2(lineGross - line.discountAmount);
+      const discountAmount = round2(lineGross * (line.discountPercent / 100));
+      const lineSubtotal = round2(lineGross - discountAmount);
       const lineTax = round2(lineSubtotal * (line.taxRateValue ?? 0));
       const lineTotal = round2(lineSubtotal + lineTax);
-      return { ...line, lineGross, lineSubtotal, lineTax, lineTotal };
+      return { ...line, lineGross, discountAmount, lineSubtotal, lineTax, lineTotal };
     })
   );
 
@@ -611,7 +618,7 @@ export class SalePosComponent implements OnInit {
       items: this.cartItems().map((line) => ({
         productId: line.productId,
         quantity: line.quantity,
-        discountAmount: line.discountAmount
+        discountAmount: round2(line.price * line.quantity * (line.discountPercent / 100))
       })),
       payments: this.paymentLines().map((p) => ({ method: p.method, amount: p.amount }))
     };
@@ -626,6 +633,7 @@ export class SalePosComponent implements OnInit {
         this.selectedCustomerId = null;
         this.loadStock();
         if (this.activeTab() === 'history') this.loadHistory();
+        this.onViewReceipt(sale);
       },
       error: (e) => { this.saving.set(false); this.notify.httpError(e); }
     });
@@ -634,6 +642,12 @@ export class SalePosComponent implements OnInit {
   // ===== Turno =====
   goToCashSessions(): void {
     this.router.navigate(['/caja/turnos']);
+  }
+
+  /** El turno se cerró desde el diálogo compartido — vuelve al gate de "sin turno abierto" */
+  onSessionClosed(): void {
+    this.cartItems.set([]);
+    this.loadCurrentSession();
   }
 
   // ===== Historial =====
@@ -680,6 +694,44 @@ export class SalePosComponent implements OnInit {
   receiptEmailInput = '';
   sendingReceipt = signal(false);
 
+  /**
+   * Cada sucursal puede tener una impresora distinta — se deja a elegir en vez de adivinar.
+   * Las variantes "-auto" para térmica dejan el alto en `auto` (css estándar de impresión
+   * continua) en vez de medirlo del ticket renderizado — en el PDF de prueba del navegador se ve
+   * con una franja en blanco (Chrome no lo respeta bien en el diálogo interactivo), pero el
+   * driver real de una impresora térmica física puede manejarlo distinto (rollo continuo que se
+   * corta solo), así que se deja como opción para que prueben en el equipo real, junto con la
+   * variante "ajustada al ticket" que sí mide el alto exacto.
+   * Las variantes "-full" usan un diseño pensado para llenar la hoja completa (fuente más
+   * grande, sin el ancho angosto de ticket térmico) en vez de imprimir el mismo ticket chico
+   * centrado en medio de una hoja grande — ver `onPrintReceipt` y `.receipt-ticket.full-page`
+   * en styles.scss.
+   */
+  readonly receiptPaperSizes: { value: string; label: string }[] = [
+    { value: '80mm', label: 'Térmica 80mm (ajustada al ticket)' },
+    { value: '58mm', label: 'Térmica 58mm (ajustada al ticket)' },
+    { value: '80mm-auto', label: 'Térmica 80mm (alto automático)' },
+    { value: '58mm-auto', label: 'Térmica 58mm (alto automático)' },
+    { value: 'letter', label: 'Carta — ticket angosto en hoja completa' },
+    { value: 'a4', label: 'A4 — ticket angosto en hoja completa' },
+    { value: 'letter-full', label: 'Carta — formato factura (letra grande)' },
+    { value: 'a4-full', label: 'A4 — formato factura (letra grande)' }
+  ];
+  /** Recordado por navegador (cada caja suele tener siempre la misma impresora conectada) */
+  receiptPaperSize: string = this.loadReceiptPaperSize();
+
+  private loadReceiptPaperSize(): string {
+    try {
+      return localStorage.getItem('pos.receiptPaperSize') ?? '80mm';
+    } catch {
+      return '80mm';
+    }
+  }
+
+  onReceiptPaperSizeChange(size: string): void {
+    try { localStorage.setItem('pos.receiptPaperSize', size); } catch { /* almacenamiento no disponible, no es crítico */ }
+  }
+
   onViewReceipt(sale: ISale): void {
     this.receipt.set(null);
     this.receiptEmailInput = '';
@@ -699,7 +751,59 @@ export class SalePosComponent implements OnInit {
     return this.companiesService.getLogoUrl(logoPath);
   }
 
+  /**
+   * El ticket va a una impresora térmica (rollo angosto) en la mayoría de los casos, no a una
+   * hoja Carta/A4 — sin esto el navegador imprime en el tamaño de página por defecto, dejando
+   * casi toda la hoja en blanco con el ticket chiquito arriba. Un `@page` con nombre vía CSS
+   * (`page: print-receipt`) no funciona para esto en Chrome (no cambia el tamaño de papel del
+   * diálogo), así que se inyecta/retira por JS justo para esta impresión, según el tamaño que
+   * el usuario eligió en `receiptPaperSize` (select junto al botón "Imprimir").
+   *
+   * Para las térmicas (58mm/80mm) el alto NO se deja en `auto`: se probó `size: 80mm auto;` y
+   * Chrome no lo refleja de forma confiable en el diálogo de impresión interactivo — la regla
+   * queda como inválida y cae de vuelta al tamaño Carta por defecto (hoja completa con el ticket
+   * chiquito arriba, el mismo bug original). En su lugar se mide el alto real del ticket ya
+   * renderizado (px) y se convierte a mm, para fijar un `size` con ancho Y alto numéricos.
+   *
+   * Las opciones "-full" (hoja completa) además agregan la clase `full-page` a `.receipt-ticket`
+   * mientras dura la impresión, para que el CSS de `styles.scss` use el diseño de hoja completa
+   * en vez del ticket angosto estirado (que se ve raro con líneas cortas en una hoja ancha).
+   */
   onPrintReceipt(): void {
+    const isFullPage = this.receiptPaperSize.endsWith('-full');
+    const isAutoHeight = this.receiptPaperSize.endsWith('-auto');
+    const basePaper = isFullPage ? this.receiptPaperSize.replace('-full', '')
+      : isAutoHeight ? this.receiptPaperSize.replace('-auto', '')
+      : this.receiptPaperSize;
+
+    const ticketEl = document.querySelector<HTMLElement>('.receipt-ticket');
+    ticketEl?.classList.toggle('full-page', isFullPage);
+
+    const margin = isFullPage ? '12mm 15mm' : '3mm 4mm';
+    let size: string;
+    if (basePaper === 'letter') {
+      size = 'letter';
+    } else if (basePaper === 'a4') {
+      size = 'A4';
+    } else if (isAutoHeight) {
+      size = `${basePaper} auto`;
+    } else {
+      const heightPx = ticketEl?.getBoundingClientRect().height ?? 600;
+      // px → mm (96dpi) + colchón por si el ancho real de impresión difiere un poco del modal
+      const heightMm = Math.ceil((heightPx * 25.4) / 96) + 15;
+      size = `${basePaper} ${heightMm}mm`;
+    }
+
+    const style = document.createElement('style');
+    style.textContent = `@page { size: ${size}; margin: ${margin}; }`;
+    document.head.appendChild(style);
+
+    const cleanup = () => {
+      style.remove();
+      ticketEl?.classList.remove('full-page');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
     window.print();
   }
 

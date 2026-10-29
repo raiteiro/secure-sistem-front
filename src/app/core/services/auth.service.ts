@@ -10,7 +10,9 @@ import {
   IChangePasswordRequest,
   IRefreshTokenRequest,
   IForgotPasswordRequest,
-  IResetPasswordRequest
+  IResetPasswordRequest,
+  ISwitchCompanyRequest,
+  IMyCompanyOption
 } from '../models/auth.models';
 
 const TOKEN_KEY = 'auth_token';
@@ -74,6 +76,23 @@ export class AuthService {
       shareReplay(1)
     );
     return this.refreshInFlight$;
+  }
+
+  /** Empresas en las que el usuario puede estar activo ahora mismo — para el selector del header */
+  getMyCompanies(): Observable<IMyCompanyOption[]> {
+    return this.http.get<IMyCompanyOption[]>(`${this.apiUrl}/my-companies`);
+  }
+
+  /**
+   * Cambia la empresa activa de la sesión actual. El backend emite un token/sesión nuevos (igual
+   * que login), así que se aplica con el mismo mecanismo — el caller debe recargar menú,
+   * permisos y tema después de que esto resuelva (ver SidebarComponent.onSwitchCompany).
+   */
+  switchCompany(companyId: number): Observable<ILoginResponse> {
+    const request: ISwitchCompanyRequest = { companyId };
+    return this.http.post<ILoginResponse>(`${this.apiUrl}/switch-company`, request).pipe(
+      tap((response) => this.applySession(response))
+    );
   }
 
   me(): Observable<IUser> {

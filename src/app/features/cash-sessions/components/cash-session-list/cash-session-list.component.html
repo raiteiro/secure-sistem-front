@@ -39,35 +39,7 @@
   </div>
 </p-dialog>
 
-<!-- MODAL: Cerrar turno -->
-<p-dialog [(visible)]="showCloseModal" [modal]="true" [draggable]="false" [resizable]="false"
-  [style]="{ width: '420px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
-  <div class="rm-header">
-    <div class="rm-title"><i class="pi pi-lock"></i> Cerrar turno</div>
-    <button class="rm-close" (click)="showCloseModal = false"><i class="pi pi-times"></i></button>
-  </div>
-  <div class="rm-body">
-    @if (currentSession(); as session) {
-      <p class="modal-item-label">{{ session.cashRegisterName }}</p>
-      <p class="modal-item-sublabel">Monto de apertura: {{ session.openingAmount | number: '1.2-2' }}</p>
-    }
-    <div class="rm-field-single">
-      <label>Monto de cierre *</label>
-      <input type="number" [(ngModel)]="closeForm.closingAmount" min="0" step="any" placeholder="ej: 520" />
-    </div>
-    <div class="rm-field-single">
-      <label>Notas</label>
-      <textarea [(ngModel)]="closeForm.notes" rows="2" placeholder="Observaciones del corte..."></textarea>
-    </div>
-  </div>
-  <div class="rm-footer">
-    <button class="rm-btn-cancel" (click)="showCloseModal = false">Cancelar</button>
-    <button class="rm-btn-save" (click)="onSaveClose()" [disabled]="savingClose()">
-      @if (savingClose()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
-      Cerrar turno
-    </button>
-  </div>
-</p-dialog>
+<app-close-cash-session-dialog #closeDialog [session]="currentSession()" (closed)="onSessionClosed()" />
 
 <!-- Estado actual -->
 <div class="current-card">
@@ -81,7 +53,7 @@
           <span class="current-status">Turno abierto</span>
           <span class="current-detail">{{ session.cashRegisterName }} — apertura {{ session.openingAmount | number: '1.2-2' }} el {{ session.openedAt | date: 'short' }}</span>
         </div>
-        <button class="btn-primary" *appHasPermission="'CASH_SESSIONS.CLOSE'" (click)="onCloseSession()"><i class="pi pi-lock"></i> Cerrar turno</button>
+        <button class="btn-primary" *appHasPermission="'CASH_SESSIONS.CLOSE'" (click)="closeDialog.open()"><i class="pi pi-lock"></i> Cerrar turno</button>
       </div>
     } @else {
       <div class="current-closed">
@@ -141,8 +113,11 @@
                 <th style="text-align: right">Cierre</th>
                 <th style="text-align: right">Esperado</th>
                 <th style="text-align: right">Diferencia</th>
+                <th>Abierto por</th>
                 <th>Abierto</th>
+                <th>Cerrado por</th>
                 <th>Cerrado</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -166,8 +141,17 @@
                   >
                     {{ session.difference === null ? '—' : (session.difference | number: '1.2-2') }}
                   </td>
+                  <td>{{ session.username }}</td>
                   <td>{{ session.openedAt | date: 'short' }}</td>
+                  <td>{{ session.modifiedBy || '—' }}</td>
                   <td>{{ session.closedAt ? (session.closedAt | date: 'short') : '—' }}</td>
+                  <td>
+                    @if (!session.isOpen) {
+                      <button class="action-btn print" (click)="closeDialog.reprint(session.id)" title="Reimprimir corte">
+                        <i class="pi pi-print"></i>
+                      </button>
+                    }
+                  </td>
                 </tr>
               }
             </tbody>

@@ -47,6 +47,16 @@ export class PermissionsService {
     });
   }
 
+  /**
+   * Fuerza recargar los permisos del usuario actual, ignorando la caché por id de usuario —
+   * usar tras cambiar de empresa (AuthService.switchCompany), donde el id de usuario no
+   * cambia pero sí su rol activo, así que el `effect` de arriba no detectaría nada por sí solo.
+   */
+  reload(): void {
+    this.loadedForUserId = null;
+    this.onUserChange(this.authService.currentUser()?.id ?? null);
+  }
+
   has(permissionId: string): boolean {
     if (this.authService.isSystemAdmin()) return true;
 

@@ -117,7 +117,9 @@
           <label>Método de reembolso</label>
           <select [(ngModel)]="returnForm.refundMethod">
             <option value="Cash">Efectivo</option>
-            <option value="Card">Tarjeta</option>
+            <option value="Debit">Tarjeta de débito</option>
+            <option value="Credit">Tarjeta de crédito</option>
+            <option value="Transfer">Transferencia</option>
             <option value="Other">Otro</option>
           </select>
         </div>

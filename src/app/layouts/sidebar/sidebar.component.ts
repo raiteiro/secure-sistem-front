@@ -1,11 +1,17 @@
-import { Component, ElementRef, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnInit, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { NavigationEnd, Router, RouterModule } from '@angular/router';
 import { filter, map } from 'rxjs';
 import { NavigationService } from '../../core/services/navigation.service';
 import { AuthService } from '../../core/services/auth.service';
+import { PermissionsService } from '../../core/services/permissions.service';
+import { ThemeService } from '../../core/services/theme.service';
+import { CompaniesService } from '../../features/companies/services/companies.service';
+import { NotificationService } from '../../core/services/notification.service';
 import { INavigationRoute } from '../../core/models/navigation.models';
+import { IMyCompanyOption } from '../../core/models/auth.models';
 
 /** Bloque del panel flotante: rutas sueltas del apartado (sin título) o un subgrupo con su título */
 interface IFlyoutSection {
@@ -35,7 +41,7 @@ const VIEWPORT_MARGIN = 12;
 @Component({
   selector: 'app-sidebar',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule],
   templateUrl: './sidebar.component.html',
   styleUrl: './sidebar.component.scss',
   host: {
@@ -44,13 +50,63 @@ const VIEWPORT_MARGIN = 12;
     '(window:resize)': 'closeFlyout()'
   }
 })
-export class SidebarComponent {
+export class SidebarComponent implements OnInit {
   readonly navService = inject(NavigationService);
   readonly authService = inject(AuthService);
+  private readonly permissionsService = inject(PermissionsService);
+  private readonly themeService = inject(ThemeService);
+  private readonly companiesService = inject(CompaniesService);
+  private readonly notify = inject(NotificationService);
   private readonly router = inject(Router);
   private readonly host: ElementRef<HTMLElement> = inject(ElementRef);
 
   collapsed = signal(false);
+
+  /** Empresas en las que el usuario puede estar activo — ver AuthService.getMyCompanies() */
+  myCompanies = signal<IMyCompanyOption[]>([]);
+  switchingCompany = signal(false);
+
+  ngOnInit(): void {
+    this.loadMyCompanies();
+  }
+
+  private loadMyCompanies(): void {
+    this.authService.getMyCompanies().subscribe({
+      next: (options) => this.myCompanies.set(options),
+      // Silencioso: si falla, el selector simplemente no aparece (misma empresa de siempre)
+      error: () => this.myCompanies.set([])
+    });
+  }
+
+  /** Cambia la empresa activa: nuevo token/sesión, luego recarga menú, permisos y tema — como un mini re-login */
+  onSwitchCompany(companyId: number): void {
+    if (companyId === this.authService.currentUser()?.companyId) return;
+
+    this.switchingCompany.set(true);
+    this.closeFlyout();
+    this.authService.switchCompany(companyId).subscribe({
+      next: () => {
+        this.switchingCompany.set(false);
+        this.navService.loadUserTree().subscribe();
+        this.permissionsService.reload();
+        this.loadMyCompanies();
+        this.applyCompanyTheme(companyId);
+        this.router.navigate(['/dashboard']);
+      },
+      error: (e) => {
+        this.switchingCompany.set(false);
+        this.notify.httpError(e);
+        this.loadMyCompanies(); // revierte el select al valor real
+      }
+    });
+  }
+
+  private applyCompanyTheme(companyId: number): void {
+    this.companiesService.getById(companyId).subscribe({
+      next: (company) => this.themeService.applyPreset(company.colorPreset),
+      error: () => this.themeService.reset()
+    });
+  }
 
   /** Apartado cuyo panel flotante está abierto (null = ninguno) */
   openGroup = signal<INavigationRoute | null>(null);

@@ -621,8 +621,61 @@ html, body {
 @media print {
   body * { visibility: hidden; }
   .receipt-print-area, .receipt-print-area * { visibility: visible; }
+  /* `position: fixed` (no `absolute`): PrimeNG centra el `.p-dialog` con `transform`, y
+     `transform` crea su propio "contenedor de posicionamiento" para cualquier descendiente
+     `position: absolute` — con eso, `width: 100%` de aquí abajo terminaba siendo 100% del ancho
+     del dialog (chico), no de la hoja física, y el ticket imprimía chiquito y centrado en medio
+     de una hoja en blanco. `fixed` se posiciona respecto al viewport/página incluso dentro de un
+     ancestro con `transform`, así que evita ese problema sin tener que tocar PrimeNG. */
   .receipt-print-area {
-    position: absolute; top: 0; left: 0; width: 100%; margin: 0; padding: 0;
+    position: fixed; top: 0; left: 0; width: 100%; margin: 0; padding: 0;
   }
   .p-dialog-mask { background: transparent !important; }
+  /* El modal (`.route-modal .p-dialog`/`.p-dialog-content`) recorta con `overflow: hidden` y
+     `max-height: 90vh` para que los formularios largos scrolleen solo en `.rm-body` (ver estilos
+     de arriba), y PrimeNG lo centra con `transform` — todo eso había quedado como el contenedor
+     de referencia del `.receipt-print-area` de aquí arriba, recortando el ticket/corte y dejando
+     una franja en blanco en vez del contenido. Se anula solo en impresión (`transform: none`
+     además del `position: fixed` de arriba, por si alguna versión de PrimeNG combina ambos). */
+  .route-modal .p-dialog,
+  .route-modal .p-dialog-content,
+  .rm-body {
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+    width: auto !important;
+    max-width: none !important;
+    transform: none !important;
+  }
+}
+
+/* El tamaño de página para el ticket de venta (impresora térmica, rollo angosto, o Carta/A4 en
+   sus dos variantes) se inyecta por JS justo antes de `window.print()` — ver `onPrintReceipt()`
+   en sale-pos.component.ts. Se probó un `@page` nombrado (`page: print-receipt` sobre
+   `.receipt-ticket`) pero Chrome no lo refleja en el tamaño de papel del diálogo de impresión
+   (named pages con `size` propio no es confiable ahí), así que no sirve para esto. */
+@media print {
+  .receipt-ticket { max-width: 100% !important; }
+
+  /* Diseño de "hoja completa" (Carta/A4, variantes "-full" en receiptPaperSizes): en vez del
+     ticket angosto de impresora térmica estirado a lo ancho de una hoja grande (líneas cortas
+     con muchísimo espacio en blanco a los lados, se ve mal), usa tipografía y espaciados más
+     grandes para que el contenido se sienta como un recibo/factura de hoja completa. */
+  .receipt-ticket.full-page {
+    font-size: 1.0625rem;
+    padding: 2rem 0;
+  }
+  .receipt-ticket.full-page .receipt-logo { max-width: 180px; max-height: 100px; }
+  .receipt-ticket.full-page .receipt-company { font-size: 1.3125rem; }
+  .receipt-ticket.full-page .receipt-title { font-size: 1.125rem; }
+  .receipt-ticket.full-page .receipt-items th,
+  .receipt-ticket.full-page .receipt-items td { padding: 0.5rem 0; }
+  .receipt-ticket.full-page .receipt-grand-total { font-size: 1.25rem; }
+}
+
+/* Reportes anchos (Cortes de caja, Ventas por periodo): se imprimen en horizontal para que
+   quepan más columnas — a diferencia del ticket/corte (angostos, página normal vertical). */
+@page print-landscape { size: landscape; margin: 12mm; }
+@media print {
+  .print-landscape { page: print-landscape; }
 }

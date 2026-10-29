@@ -79,6 +79,27 @@
 :host ::ng-deep .p-datatable {
   .p-datatable-thead > tr > th { background: #f8f9fc; color: #4a4a5a; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.6px; padding: 0.875rem 1.25rem; border: none; border-bottom: 2px solid #e8eaf0; }
   .p-datatable-tbody > tr { > td { padding: 0.625rem 1.25rem; border: none; border-bottom: 1px solid #f3f4f6; font-size: 0.875rem; color: #374151; } &:hover > td { background: #f8f9fc; } }
+
+  // Mismo look que el paginador de Usuarios, para que no se vea con el tema PrimeNG por defecto
+  .p-paginator {
+    display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
+    border: none; padding: 1rem 1.5rem; background: #f8f9fc; border-top: 1px solid #f0f0f5;
+    .p-paginator-page, .p-paginator-first, .p-paginator-prev, .p-paginator-next, .p-paginator-last {
+      min-width: 2.25rem; height: 2.25rem; border-radius: 8px; border: none; margin: 0 0.15rem;
+      font-size: 0.8125rem; font-weight: 500; color: #6b7280; transition: all 0.15s;
+      &:hover:not(.p-highlight) { background: #e8eaf0; color: #1a1a2e; }
+    }
+    .p-paginator-page.p-highlight {
+      background: linear-gradient(135deg, rgba(255,255,255,0.18), rgba(0,0,0,0.15)), var(--brand-button);
+      color: #fff; box-shadow: 0 2px 8px rgba(var(--brand-button-rgb), 0.3);
+    }
+    // El dropdown "filas por página" queda pegado a los botones con el margin chico del tema
+    // PrimeNG por defecto (0.5rem) — se separa más para que no se vea encimado con "»".
+    .p-dropdown {
+      border: 2px solid #e5e7eb; border-radius: 8px; height: 2.25rem; margin-left: 1.25rem !important;
+      .p-dropdown-label { font-size: 0.8125rem; padding: 0.375rem 1.5rem 0.375rem 0.625rem; }
+    }
+  }
 }
 
 .product-thumb { width: 32px; height: 32px; border-radius: 8px; object-fit: contain; background: #f3f4f6; }
@@ -104,6 +125,11 @@
   display: inline-block; margin-left: 0.5rem; padding: 0.125rem 0.5rem; border-radius: 20px;
   font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
   background: #f0fdfa; color: #0f766e;
+}
+.no-stock-badge {
+  display: inline-block; margin-left: 0.5rem; padding: 0.125rem 0.5rem; border-radius: 20px;
+  font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+  background: #f3f4f6; color: #6b7280;
 }
 
 // ===== Tipo: Producto / Insumo =====

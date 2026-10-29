@@ -188,6 +188,53 @@
     </div>
   </p-dialog>
 
+  <!-- MODAL: Transferir a otro almacén -->
+  <p-dialog [(visible)]="showTransferModal" [modal]="true" [draggable]="false" [resizable]="false"
+    [style]="{ width: '460px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+    <div class="rm-header">
+      <div class="rm-title"><i class="pi pi-send"></i> Transferir a otro almacén</div>
+      <button class="rm-close" (click)="showTransferModal = false"><i class="pi pi-times"></i></button>
+    </div>
+    <div class="rm-body">
+      @if (transferItem) {
+        <p class="modal-item-label">{{ transferItem.productName }}</p>
+        <p class="modal-item-sublabel">
+          Existencia en {{ transferItem.warehouseName }}: {{ transferItem.quantity | number: '1.0-4' }} {{ transferItem.unitAbbreviation }}
+        </p>
+      }
+      @if (otherWarehouses().length === 0) {
+        <p class="supplier-hint muted"><i class="pi pi-info-circle"></i> No hay otro almacén activo en esta empresa para transferir.</p>
+      } @else {
+        <div class="rm-field-single">
+          <label>Almacén de destino *</label>
+          <select [(ngModel)]="transferForm.destinationWarehouseId">
+            <option [ngValue]="null">Selecciona un almacén</option>
+            @for (wh of otherWarehouses(); track wh.id) {
+              <option [ngValue]="wh.id">{{ wh.name }}</option>
+            }
+          </select>
+        </div>
+        <div class="rm-field-single">
+          <label>Cantidad *</label>
+          <input type="number" [(ngModel)]="transferForm.quantity" min="0" [step]="itemStep(transferItem)" placeholder="ej: 10" />
+        </div>
+        <div class="rm-field-single">
+          <label>Notas</label>
+          <textarea [(ngModel)]="transferForm.notes" rows="2" placeholder="ej: Reabastecer sucursal"></textarea>
+        </div>
+      }
+    </div>
+    <div class="rm-footer">
+      <button class="rm-btn-cancel" (click)="showTransferModal = false">Cancelar</button>
+      @if (otherWarehouses().length > 0) {
+        <button class="rm-btn-save" (click)="onSaveTransfer()" [disabled]="savingTransfer()">
+          @if (savingTransfer()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+          Transferir
+        </button>
+      }
+    </div>
+  </p-dialog>
+
   <!-- MODAL: Historial -->
   <p-dialog [(visible)]="showHistoryModal" [modal]="true" [draggable]="false" [resizable]="false"
     [style]="{ width: '640px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
@@ -286,6 +333,7 @@
             <div class="actions-cell">
               <button class="action-btn min-stock" *appHasPermission="'WAREHOUSES.EDIT_MIN_STOCK'" (click)="onEditMinStock(item)" title="Editar stock mínimo"><i class="pi pi-bell"></i></button>
               <button class="action-btn movement" *appHasPermission="'WAREHOUSES.REGISTER_MOVEMENT'" (click)="onRegisterMovement(item)" title="Registrar movimiento"><i class="pi pi-arrow-right-arrow-left"></i></button>
+              <button class="action-btn transfer" *appHasPermission="'WAREHOUSES.TRANSFER'" (click)="onTransfer(item)" title="Transferir a otro almacén" [disabled]="item.quantity <= 0"><i class="pi pi-send"></i></button>
               @if (item.isManufactured) {
                 <button class="action-btn disassemble" *appHasPermission="'WAREHOUSES.DISASSEMBLE'"
                   (click)="disassembleItem.set(item)" title="Separar en insumos" [disabled]="item.quantity <= 0">

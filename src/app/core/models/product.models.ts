@@ -25,6 +25,8 @@ export interface IProduct {
   isActive: boolean;
   /** Si es true, el producto es un combo/kit — sus componentes se manejan vía /combo-items */
   isCombo: boolean;
+  /** Si es false, se puede vender con 0/sin existencias (no bloquea ni descuenta stock). Siempre true si isCombo es true */
+  tracksStock: boolean;
   /** "Supply" = insumo: no se vende, se consume al fabricar. Exclusivo: nunca es las dos cosas */
   kind: ProductKind;
   /** Producto con receta de insumos que se fabrica en almacén (ver /recipe y /api/Production). Siempre kind="Product" */
@@ -66,6 +68,8 @@ export interface IProductRequest {
   /** Solo admin de sistema: crea el producto en otra empresa. Si se omite, usa la empresa del que llama. */
   companyId?: number;
   isCombo: boolean;
+  /** Si es false, se puede vender con 0/sin existencias. Se ignora (se fuerza true) cuando isCombo es true */
+  tracksStock: boolean;
   /**
    * Al crear, default "Product". Al editar es opcional: si se omite, el tipo se queda como estaba.
    * Un insumo no puede ser combo ni tener proveedor consignador.

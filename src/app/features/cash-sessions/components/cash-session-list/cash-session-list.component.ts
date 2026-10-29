@@ -5,13 +5,13 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { DialogModule } from 'primeng/dialog';
 import { HasPermissionDirective } from '../../../../shared/directives/has-permission.directive';
 import { PagerComponent } from '../../../../shared/components/pager/pager.component';
+import { CloseCashSessionDialogComponent } from '../../../../shared/components/close-cash-session-dialog/close-cash-session-dialog.component';
 import { CashSessionsService } from '../../services/cash-sessions.service';
 import { CashRegistersService } from '../../../cash-registers/services/cash-registers.service';
 import { CompaniesService } from '../../../companies/services/companies.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import {
   ICashSession,
-  ICloseCashSessionRequest,
   IOpenCashSessionRequest
 } from '../../../../core/models/cash-session.models';
 import { ICashRegister } from '../../../../core/models/cash-register.models';
@@ -29,7 +29,7 @@ interface ICashSessionGroup {
 @Component({
   selector: 'app-cash-session-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, DialogModule, HasPermissionDirective, PagerComponent],
+  imports: [CommonModule, FormsModule, DialogModule, HasPermissionDirective, PagerComponent, CloseCashSessionDialogComponent],
   templateUrl: './cash-session-list.component.html',
   styleUrl: './cash-session-list.component.scss'
 })
@@ -65,11 +65,6 @@ export class CashSessionListComponent implements OnInit {
     cashRegisterId: null,
     openingAmount: null
   };
-
-  // ===== Modal: cerrar turno =====
-  showCloseModal = false;
-  savingClose = signal(false);
-  closeForm: { closingAmount: number | null; notes: string } = { closingAmount: null, notes: '' };
 
   ngOnInit(): void {
     this.loadCurrent();
@@ -204,40 +199,11 @@ export class CashSessionListComponent implements OnInit {
     });
   }
 
-  // ===== Cerrar turno =====
-  onCloseSession(): void {
-    if (!this.currentSession()) return;
-    this.closeForm = { closingAmount: null, notes: '' };
-    this.showCloseModal = true;
-  }
-
-  onSaveClose(): void {
-    const session = this.currentSession();
-    if (!session) return;
-    if (this.closeForm.closingAmount === null || this.closeForm.closingAmount < 0) {
-      this.notify.warn('Ingresa un monto de cierre válido');
-      return;
-    }
-
-    const request: ICloseCashSessionRequest = {
-      closingAmount: this.closeForm.closingAmount,
-      notes: this.closeForm.notes || null
-    };
-
-    this.savingClose.set(true);
-    this.sessionsService.close(session.id, request).subscribe({
-      next: (closed) => {
-        this.savingClose.set(false);
-        this.showCloseModal = false;
-        const expected = closed.expectedAmount !== null ? closed.expectedAmount.toFixed(2) : '—';
-        const difference = closed.difference !== null ? closed.difference.toFixed(2) : '—';
-        this.notify.success(`Turno cerrado. Esperado: ${expected}, Diferencia: ${difference}`);
-        this.loadCurrent();
-        this.page.set(1);
-        this.loadHistory();
-        this.loadCashRegisters();
-      },
-      error: (e) => { this.savingClose.set(false); this.notify.httpError(e); }
-    });
+  /** El turno se cerró desde el diálogo compartido — recargar estado actual, historial y cajas */
+  onSessionClosed(): void {
+    this.loadCurrent();
+    this.page.set(1);
+    this.loadHistory();
+    this.loadCashRegisters();
   }
 }

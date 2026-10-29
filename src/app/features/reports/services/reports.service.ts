@@ -7,6 +7,8 @@ import {
   ICashierCloseoutFilters,
   ISalesByPeriodFilters,
   ISalesByPeriodReport,
+  ISalesDetailFilters,
+  ISalesDetailReport,
   ITopProduct,
   ITopProductsFilters
 } from '../../../core/models/report.models';
@@ -53,5 +55,14 @@ export class ReportsService {
   /** Igual que `getCashierCloseoutsPage`, pero recorre todas las páginas */
   getCashierCloseouts(filters?: ICashierCloseoutFilters): Observable<ICashierCloseout[]> {
     return fetchAllPages((page) => this.getCashierCloseoutsPage({ ...filters, page, pageSize: MAX_PAGE_SIZE }));
+  }
+
+  /** Todos los filtros son opcionales. Sin from/to → mes en curso a la fecha */
+  getSalesDetail(filters?: ISalesDetailFilters): Observable<ISalesDetailReport> {
+    let params = new HttpParams();
+    if (filters?.from) params = params.set('from', filters.from);
+    if (filters?.to) params = params.set('to', filters.to);
+    if (filters?.branchId) params = params.set('branchId', filters.branchId);
+    return this.http.get<ISalesDetailReport>(`${this.apiUrl}/sales-detail`, { params });
   }
 }

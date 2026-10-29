@@ -42,6 +42,7 @@ interface IProductForm {
   companyId: number | null;
   kind: ProductKind;
   isCombo: boolean;
+  tracksStock: boolean;
   supplierId: number | null;
   commissionType: CommissionType;
   commissionValue: number | null;
@@ -59,6 +60,7 @@ const EMPTY_FORM: IProductForm = {
   companyId: null,
   kind: 'Product',
   isCombo: false,
+  tracksStock: true,
   supplierId: null,
   commissionType: 'Percentage',
   commissionValue: null
@@ -276,6 +278,14 @@ export class ProductListComponent implements OnInit {
     return Math.round(this.form.price * (1 - this.form.commissionValue / 100) * 100) / 100;
   }
 
+  /** Precio + impuesto, solo para mostrar en el campo de solo lectura junto al select de Impuesto */
+  priceWithTax(): number | null {
+    if (this.form.price === null || !this.form.taxRateId) return null;
+    const taxRate = this.allTaxRates().find((t) => t.id === this.form.taxRateId);
+    if (!taxRate) return null;
+    return Math.round(this.form.price * (1 + taxRate.rate) * 100) / 100;
+  }
+
   /** Candidatos a componente: activos, de la misma empresa, ni el combo mismo ni otro combo (no hay combos anidados), ni ya agregados */
   readonly availableComboComponents = computed<IProduct[]>(() => {
     const usedIds = new Set(this.comboItems().map((i) => i.componentProductId));
@@ -318,6 +328,7 @@ export class ProductListComponent implements OnInit {
       companyId: null,
       kind: product.kind,
       isCombo: product.isCombo,
+      tracksStock: product.tracksStock,
       supplierId: product.supplierId,
       commissionType: product.commissionType ?? 'Percentage',
       commissionValue: product.commissionValue
@@ -392,6 +403,7 @@ export class ProductListComponent implements OnInit {
       categoryId: this.form.categoryId,
       taxRateId: this.form.taxRateId,
       isCombo: isSupply ? false : this.form.isCombo,
+      tracksStock: this.form.isCombo ? true : this.form.tracksStock,
       kind: this.form.kind,
       supplierId: this.form.supplierId,
       commissionType: isConsignor ? this.form.commissionType : null,

@@ -18,6 +18,24 @@ export interface IRefreshTokenRequest {
   refreshToken: string;
 }
 
+/** Request para POST /api/Auth/switch-company */
+export interface ISwitchCompanyRequest {
+  companyId: number;
+}
+
+/**
+ * Respuesta de GET /api/Auth/my-companies: empresas en las que el usuario puede estar activo
+ * ahora mismo — la propia (siempre primero, isHome=true) más las que le haya asignado un
+ * admin de sistema vía /api/Users/{id}/company-access, si tiene canSwitchCompany=true.
+ */
+export interface IMyCompanyOption {
+  companyId: number;
+  companyName: string;
+  roleId: number;
+  roleName: string;
+  isHome: boolean;
+}
+
 /** Info del usuario autenticado */
 export interface IUser {
   id: number;

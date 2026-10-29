@@ -88,13 +88,15 @@ export type InventoryMovementType =
   | 'Sale'
   | 'Return'
   | 'Production'
-  | 'Disassembly';
+  | 'Disassembly'
+  | 'Transfer';
 
 /**
  * Tipos que se pueden registrar a mano en POST /api/InventoryMovements. "Production"/"Disassembly"
- * solo los genera /api/Production (el backend los rechaza en movimientos manuales).
+ * solo los genera /api/Production, y "Transfer" solo POST /api/StockTransfers (el backend los
+ * rechaza en movimientos manuales).
  */
-export type ManualInventoryMovementType = Exclude<InventoryMovementType, 'Production' | 'Disassembly'>;
+export type ManualInventoryMovementType = Exclude<InventoryMovementType, 'Production' | 'Disassembly' | 'Transfer'>;
 
 /** Respuesta de GET /api/InventoryMovements y /api/InventoryMovements/{id} */
 export interface IInventoryMovement {
@@ -113,6 +115,8 @@ export interface IInventoryMovement {
   supplierName: string | null;
   /** Orden de producción que generó el movimiento (type Production/Disassembly); null en el resto */
   productionOrderId: number | null;
+  /** Traspaso que generó el movimiento (type Transfer); null en el resto */
+  stockTransferId: number | null;
   companyId: number;
   createdAt: string;
   createdBy: string;

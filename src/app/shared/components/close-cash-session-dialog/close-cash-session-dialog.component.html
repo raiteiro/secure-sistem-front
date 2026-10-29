@@ -1,0 +1,143 @@
+<!-- MODAL: Cerrar turno -->
+<p-dialog [(visible)]="showCloseModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '420px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi pi-lock"></i> Cerrar turno</div>
+    <button class="rm-close" (click)="showCloseModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    @if (session) {
+      <p class="modal-item-label">{{ session.cashRegisterName }}</p>
+      <p class="modal-item-sublabel">Monto de apertura: {{ session.openingAmount | number: '1.2-2' }}</p>
+    }
+    <div class="rm-field-single">
+      <label>Monto de cierre *</label>
+      <input type="number" [(ngModel)]="closeForm.closingAmount" min="0" step="any" placeholder="ej: 520" />
+    </div>
+    <div class="rm-field-single">
+      <label>Notas</label>
+      <textarea [(ngModel)]="closeForm.notes" rows="2" placeholder="Observaciones del corte..."></textarea>
+    </div>
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showCloseModal = false">Cancelar</button>
+    <button class="rm-btn-save" (click)="onSaveClose()" [disabled]="savingClose">
+      @if (savingClose) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+      Cerrar turno
+    </button>
+  </div>
+</p-dialog>
+
+<!-- MODAL: Corte de caja (imprimible) -->
+<p-dialog [(visible)]="showCloseoutModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '720px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi pi-receipt"></i> Corte de caja</div>
+    <button class="rm-close" (click)="showCloseoutModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    @if (closeout; as c) {
+      <div class="receipt-print-area">
+        <div class="closeout-doc">
+          @if (closeoutLogoUrl(c.companyLogoPath); as logo) {
+            <img [src]="logo" alt="" class="closeout-logo" />
+          }
+          <p class="closeout-company">{{ c.companyName }}</p>
+          @if (c.companyTaxId) { <p class="closeout-meta">{{ c.companyTaxId }}</p> }
+          @if (c.companyAddress) { <p class="closeout-meta">{{ c.companyAddress }}</p> }
+          @if (c.companyPhone) { <p class="closeout-meta">{{ c.companyPhone }}</p> }
+
+          <h3 class="closeout-title">CORTE DE CAJA</h3>
+          <p class="closeout-meta">{{ c.cashRegisterName }} — {{ c.branchName }} — Cajero: {{ c.username }}</p>
+          <p class="closeout-meta">
+            Abierto: {{ c.openedAt | date: 'short' }}
+            @if (c.closedAt) { — Cerrado: {{ c.closedAt | date: 'short' }} }
+          </p>
+
+          <div class="closeout-divider"></div>
+
+          <h4 class="closeout-section-title">Movimientos</h4>
+          @if (c.movements.length === 0) {
+            <p class="closeout-empty">Sin movimientos en este turno.</p>
+          } @else {
+            <table class="closeout-table">
+              <thead>
+                <tr>
+                  <th>Hora</th>
+                  <th>Cliente</th>
+                  <th>Folio</th>
+                  <th>Forma de pago</th>
+                  <th>Estatus</th>
+                  <th class="closeout-amount">Importe</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (m of c.movements; track $index) {
+                  <tr>
+                    <td>{{ m.createdAt | date: 'shortTime' }}</td>
+                    <td>{{ m.customerName || 'Público en general' }}</td>
+                    <td>#{{ m.folioNumber }}</td>
+                    <td>{{ paymentMethodLabels[m.method] || m.method }}</td>
+                    <td>
+                      @if (m.kind === 'Return') { Devolución }
+                      @else if (m.status === 'Cancelled') { Cancelada }
+                      @else { Aplicado }
+                    </td>
+                    <td class="closeout-amount" [class.negative]="m.amount < 0">{{ m.amount | number: '1.2-2' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+
+          <div class="closeout-divider"></div>
+
+          <h4 class="closeout-section-title">Pagado por forma de pago</h4>
+          <table class="closeout-table">
+            <thead>
+              <tr><th>Forma de pago</th><th>Movimientos</th><th class="closeout-amount">Subtotal</th></tr>
+            </thead>
+            <tbody>
+              @for (t of c.totals; track t.method) {
+                <tr>
+                  <td>{{ paymentMethodLabels[t.method] || t.method }}</td>
+                  <td>{{ t.count }}</td>
+                  <td class="closeout-amount" [class.negative]="t.subtotal < 0">{{ t.subtotal | number: '1.2-2' }}</td>
+                </tr>
+              }
+              <tr class="closeout-grand-total">
+                <td colspan="2">GRAN TOTAL</td>
+                <td class="closeout-amount">{{ c.netTotal | number: '1.2-2' }}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="closeout-divider"></div>
+
+          <div class="closeout-summary">
+            <div><span>Fondo de caja (apertura)</span><span>{{ c.openingAmount | number: '1.2-2' }}</span></div>
+            <div><span>Total neto de cobros</span><span>{{ c.netTotal | number: '1.2-2' }}</span></div>
+            @if (c.expectedAmount !== null) {
+              <div><span>Efectivo esperado</span><span>{{ c.expectedAmount | number: '1.2-2' }}</span></div>
+            }
+            @if (c.closingAmount !== null) {
+              <div><span>Efectivo contado</span><span>{{ c.closingAmount | number: '1.2-2' }}</span></div>
+            }
+            @if (c.difference !== null) {
+              <div class="closeout-grand-total">
+                <span>Diferencia</span>
+                <span [class.positive]="c.difference > 0" [class.negative]="c.difference < 0">{{ c.difference | number: '1.2-2' }}</span>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+      <button class="btn-print" (click)="onPrintCloseout()"><i class="pi pi-print"></i> Imprimir</button>
+    } @else if (closeoutLoading) {
+      <div class="empty-state small"><i class="pi pi-spinner pi-spin"></i><p>Cargando corte...</p></div>
+    }
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showCloseoutModal = false">Cerrar</button>
+  </div>
+</p-dialog>

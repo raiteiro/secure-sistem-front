@@ -9,7 +9,8 @@ export const INVENTORY_MOVEMENT_TYPE_LABELS: Record<InventoryMovementType, strin
   Sale: 'Venta',
   Return: 'Devolución',
   Production: 'Producción',
-  Disassembly: 'Separación'
+  Disassembly: 'Separación',
+  Transfer: 'Traspaso'
 };
 
 /**

@@ -241,7 +241,30 @@
   &.delete { color: #ef4444; &:hover { background: rgba(239, 68, 68, 0.1); } }
   &.move { color: #10b981; &:hover { background: rgba(16, 185, 129, 0.1); } }
   &.reset { color: #f59e0b; &:hover { background: rgba(245, 158, 11, 0.1); } }
+  &.companies { color: #7c3aed; &:hover { background: rgba(124, 58, 237, 0.1); } }
 }
+
+// --- Empresas adicionales ---
+.company-access-row {
+  display: flex; align-items: flex-end; gap: 0.75rem;
+  .rm-field { flex: 1 1 0; }
+}
+.remove-grant-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0; width: 38px; height: 38px; margin-bottom: 0.125rem;
+  border: none; border-radius: 8px; background: transparent; color: #ef4444;
+  cursor: pointer; transition: background 0.15s, transform 0.1s;
+  &:hover { background: rgba(239, 68, 68, 0.1); transform: scale(1.1); }
+}
+.add-grant-btn {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  margin-top: 0.25rem; padding: 0.5rem 0.875rem;
+  border: 2px dashed #e5e7eb; border-radius: 10px; background: transparent;
+  color: var(--brand-button); font-size: 0.8125rem; font-weight: 600; cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  &:hover { border-color: var(--brand-button); background: rgba(var(--brand-button-rgb), 0.06); }
+}
+.hint { font-size: 0.8125rem; color: #9ca3af; margin: 0 0 0.75rem; }
 
 .temp-password-box {
   display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
@@ -273,4 +296,5 @@
   text-align: center; padding: 3rem;
   i { font-size: 2.5rem; color: #d1d5db; }
   p { margin-top: 0.75rem; color: #9ca3af; }
+  &.small { padding: 1.5rem; i { font-size: 1.75rem; } }
 }

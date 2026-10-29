@@ -1,4 +1,5 @@
 export const environment = {
-  production: false,
-  apiUrl: 'http://localhost:5113/api'
+   //apiUrl: 'https://corepvback.nokmosis.net/api',
+   apiUrl: 'http://localhost:5113/api',
+   ws_url: 'https://corepvback.nokmosis.net',
 };

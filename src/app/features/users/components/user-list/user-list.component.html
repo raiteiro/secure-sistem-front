@@ -58,6 +58,15 @@
         </select>
       </div>
     </div>
+    <div class="rm-field-single">
+      <label>Sucursal</label>
+      <select [(ngModel)]="form.branchId">
+        <option [ngValue]="null">Sin asignar (puede abrir turno en cualquier caja de su empresa)</option>
+        @for (branch of availableBranches(); track branch.id) {
+          <option [ngValue]="branch.id">{{ branch.name }}</option>
+        }
+      </select>
+    </div>
     @if (!isEdit() && authService.isSystemAdmin()) {
       <div class="rm-field-single">
         <label>Empresa</label>
@@ -118,6 +127,73 @@
     <button class="rm-btn-save" (click)="onSaveReassign()" [disabled]="reassigning()">
       @if (reassigning()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-arrow-right-arrow-left"></i> }
       Mover
+    </button>
+  </div>
+</p-dialog>
+
+<!-- MODAL: Empresas adicionales (solo admin de sistema) -->
+<p-dialog [(visible)]="showCompanyAccessModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '560px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi pi-building-columns"></i> Empresas adicionales</div>
+    <button class="rm-close" (click)="showCompanyAccessModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    @if (loadingCompanyAccess()) {
+      <div class="empty-state small"><i class="pi pi-spinner pi-spin"></i><p>Cargando...</p></div>
+    } @else {
+      <p class="subtitle">
+        <strong>{{ companyAccessUsername }}</strong> siempre puede operar en su empresa de origen.
+        Aquí se le dan permisos para cambiar también a otras, cada una con su propio rol.
+      </p>
+      <div class="rm-switch-row">
+        <span class="rm-switch-label">Puede cambiar de empresa</span>
+        <label class="rm-toggle">
+          <input type="checkbox" [(ngModel)]="companyAccessForm.canSwitchCompany" />
+          <span class="rm-slider"></span>
+        </label>
+      </div>
+
+      @if (companyAccessForm.canSwitchCompany) {
+        @for (row of companyAccessForm.grants; track row) {
+          <div class="rm-row company-access-row">
+            <div class="rm-field">
+              <label>Empresa</label>
+              <select [(ngModel)]="row.companyId" (ngModelChange)="onGrantCompanyChange(row)">
+                <option [ngValue]="null" disabled>Seleccionar empresa</option>
+                @for (company of availableGrantCompanies(row); track company.id) {
+                  <option [ngValue]="company.id">{{ company.name }}</option>
+                }
+              </select>
+            </div>
+            <div class="rm-field">
+              <label>Rol en esa empresa</label>
+              <select [(ngModel)]="row.roleId">
+                <option [ngValue]="null" disabled>Seleccionar rol</option>
+                @for (role of availableGrantRoles(row); track role.id) {
+                  <option [ngValue]="role.id">{{ role.name }}</option>
+                }
+              </select>
+            </div>
+            <button type="button" class="remove-grant-btn" (click)="removeGrantRow(row)" title="Quitar esta empresa" aria-label="Quitar esta empresa">
+              <i class="pi pi-times"></i>
+            </button>
+          </div>
+        } @empty {
+          <p class="hint">Todavía no tiene ninguna empresa adicional asignada.</p>
+        }
+
+        <button type="button" class="add-grant-btn" (click)="addGrantRow()">
+          <i class="pi pi-plus"></i> Agregar empresa
+        </button>
+      }
+    }
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showCompanyAccessModal = false">Cancelar</button>
+    <button class="rm-btn-save" (click)="onSaveCompanyAccess()" [disabled]="savingCompanyAccess() || loadingCompanyAccess()">
+      @if (savingCompanyAccess()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
+      Guardar
     </button>
   </div>
 </p-dialog>
@@ -195,6 +271,7 @@
             <th pSortableColumn="email">Email <p-sortIcon field="email" /></th>
             <th pSortableColumn="phoneNumber">Teléfono <p-sortIcon field="phoneNumber" /></th>
             <th>Rol</th>
+            <th>Sucursal</th>
             <th style="text-align: center">Acciones</th>
           </tr>
         </ng-template>
@@ -219,11 +296,15 @@
                 {{ user.roleName || (user.roleId === 1 ? 'Admin' : 'Usuario') }}
               </span>
             </td>
+            <td>{{ user.branchName || '—' }}</td>
             <td>
               <div class="actions-cell">
                 @if (authService.isSystemAdmin()) {
                   <button class="action-btn move" *appHasPermission="'USERS.REASSIGN_COMPANY'" (click)="onReassign(user)" title="Cambiar de empresa">
                     <i class="pi pi-arrow-right-arrow-left"></i>
+                  </button>
+                  <button class="action-btn companies" *appHasPermission="'USERS.MANAGE_COMPANY_ACCESS'" (click)="onManageCompanyAccess(user)" title="Empresas adicionales">
+                    <i class="pi pi-building-columns"></i>
                   </button>
                 }
                 <button class="action-btn reset" *appHasPermission="'USERS.RESET_PASSWORD'" (click)="onResetPassword(user)" title="Restablecer contraseña">

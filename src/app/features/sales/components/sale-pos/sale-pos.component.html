@@ -30,22 +30,36 @@
           @if (r.companyAddress) { <p class="receipt-meta">{{ r.companyAddress }}</p> }
           @if (r.companyPhone) { <p class="receipt-meta">{{ r.companyPhone }}</p> }
 
+          <h3 class="receipt-title">TICKET DE VENTA</h3>
+
           <div class="receipt-divider"></div>
 
-          <p class="receipt-meta">Folio #{{ r.folioNumber }} — {{ r.createdAt | date: 'short' }}</p>
-          @if (r.branchName) { <p class="receipt-meta">Sucursal: {{ r.branchName }}</p> }
-          <p class="receipt-meta">Cajero: {{ r.cashierUsername }}</p>
-          <p class="receipt-meta">Cliente: {{ r.customerName || 'Público en general' }}</p>
+          <p class="receipt-meta"><strong>Folio:</strong> #{{ r.folioNumber }}</p>
+          <p class="receipt-meta"><strong>Fecha:</strong> {{ r.createdAt | date: 'short' }}</p>
+          @if (r.branchName) { <p class="receipt-meta"><strong>Sucursal:</strong> {{ r.branchName }}</p> }
+          <p class="receipt-meta"><strong>Le atendió:</strong> {{ r.cashierUsername }}</p>
+          <p class="receipt-meta"><strong>Cliente:</strong> {{ r.customerName || 'Público en general' }}</p>
 
           <div class="receipt-divider"></div>
 
           <table class="receipt-items">
+            <thead>
+              <tr><th>Uds.</th><th>Concepto</th><th class="receipt-amount">Importe</th></tr>
+            </thead>
             <tbody>
               @for (item of r.items; track item.productName) {
                 <tr>
-                  <td>{{ item.quantity }}x {{ item.productName }}</td>
-                  <td class="receipt-amount">{{ item.total | number: '1.2-2' }}</td>
+                  <td class="receipt-item-qty">{{ item.quantity }}</td>
+                  <td class="receipt-item-name">{{ item.productName }}</td>
+                  <td class="receipt-amount">{{ (item.unitPrice * item.quantity) | number: '1.2-2' }}</td>
                 </tr>
+                @if (item.discountAmount > 0) {
+                  <tr class="receipt-item-discount">
+                    <td></td>
+                    <td>Descuento</td>
+                    <td class="receipt-amount">-{{ item.discountAmount | number: '1.2-2' }}</td>
+                  </tr>
+                }
               }
             </tbody>
           </table>
@@ -65,6 +79,15 @@
             <p class="receipt-meta">{{ paymentMethodLabels[payment.method] }}: {{ payment.amount | number: '1.2-2' }}</p>
           }
         </div>
+      </div>
+
+      <div class="rm-field-single receipt-size-field">
+        <label>Tamaño de papel</label>
+        <select [(ngModel)]="receiptPaperSize" (ngModelChange)="onReceiptPaperSizeChange($event)">
+          @for (size of receiptPaperSizes; track size.value) {
+            <option [ngValue]="size.value">{{ size.label }}</option>
+          }
+        </select>
       </div>
 
       <button class="btn-print" (click)="onPrintReceipt()"><i class="pi pi-print"></i> Imprimir</button>
@@ -119,6 +142,11 @@
 </p-dialog>
 
 @if (activeTab() === 'new') {
+  <!-- Fuera del @if/@else de abajo: el turno se cierra y `currentSession()` pasa a null casi de
+       inmediato, así que si este diálogo viviera dentro de esa rama se destruiría a medio camino,
+       justo cuando intenta mostrar/imprimir el corte de caja (el PDF salía en blanco). -->
+  <app-close-cash-session-dialog #closeSessionDialog [session]="currentSession()" (closed)="onSessionClosed()" />
+
   <!-- Nueva venta: requiere turno de caja propio abierto -->
   @if (sessionLoading()) {
     <div class="session-gate"><i class="pi pi-spinner pi-spin"></i> Verificando turno de caja...</div>
@@ -132,6 +160,39 @@
       <button class="btn-primary" (click)="goToCashSessions()"><i class="pi pi-lock-open"></i> Abrir turno</button>
     </div>
   } @else {
+    <div class="sale-data-bar">
+      <div class="rm-field-single">
+        <label>Sucursal *</label>
+        <select [(ngModel)]="selectedBranchId" (ngModelChange)="onBranchChange()">
+          <option [ngValue]="null">Selecciona una sucursal</option>
+          @for (branch of branches(); track branch.id) {
+            <option [ngValue]="branch.id">{{ branch.name }}</option>
+          }
+        </select>
+      </div>
+      <div class="rm-field-single">
+        <label>Almacén *</label>
+        <select [(ngModel)]="selectedWarehouseId" (ngModelChange)="onWarehouseChange()">
+          <option [ngValue]="null">Selecciona un almacén</option>
+          @for (warehouse of availableWarehouses(); track warehouse.id) {
+            <option [ngValue]="warehouse.id">{{ warehouse.name }}</option>
+          }
+        </select>
+      </div>
+      <div class="rm-field-single">
+        <label>Cliente</label>
+        <select [(ngModel)]="selectedCustomerId">
+          <option [ngValue]="null">Cliente ocasional</option>
+          @for (customer of customers(); track customer.id) {
+            <option [ngValue]="customer.id">{{ customer.name }}</option>
+          }
+        </select>
+      </div>
+      <button class="btn-close-session" *appHasPermission="'CASH_SESSIONS.CLOSE'" (click)="closeSessionDialog.open()">
+        <i class="pi pi-lock"></i> Cerrar turno
+      </button>
+    </div>
+
     <div class="pos-layout">
       <!-- Columna izquierda: catálogo de productos -->
       <div class="pos-main">
@@ -178,7 +239,9 @@
                     <span class="product-card-name">{{ product.name }}</span>
                     <span class="product-card-sku">{{ product.sku || '—' }}</span>
                     <span class="product-card-price">{{ product.price | number: '1.2-2' }}</span>
-                    @if (stockWarehouseId()) {
+                    @if (!product.tracksStock) {
+                      <span class="product-card-stock">Sin control de stock</span>
+                    } @else if (stockWarehouseId()) {
                       @if (stockLoading()) {
                         <span class="product-card-stock"><i class="pi pi-spinner pi-spin"></i></span>
                       } @else if (availableFor(product.id) > 0) {
@@ -234,10 +297,11 @@
                     type="number"
                     class="discount-input"
                     min="0"
+                    max="100"
                     step="any"
-                    title="Descuento"
-                    placeholder="Desc."
-                    [ngModel]="line.discountAmount || null"
+                    title="Descuento (%)"
+                    placeholder="Desc. %"
+                    [ngModel]="line.discountPercent || null"
                     (ngModelChange)="updateDiscount(line, $event)"
                   />
                   <span class="cart-line-total">{{ line.lineTotal | number: '1.2-2' }}</span>
@@ -246,37 +310,6 @@
             } @empty {
               <div class="empty-state small"><i class="pi pi-shopping-cart"></i><p>Toca un producto para agregarlo</p></div>
             }
-          </div>
-        </div>
-
-        <div class="side-card">
-          <h3 class="side-title">Datos de venta</h3>
-          <div class="rm-field-single">
-            <label>Sucursal *</label>
-            <select [(ngModel)]="selectedBranchId" (ngModelChange)="onBranchChange()">
-              <option [ngValue]="null">Selecciona una sucursal</option>
-              @for (branch of branches(); track branch.id) {
-                <option [ngValue]="branch.id">{{ branch.name }}</option>
-              }
-            </select>
-          </div>
-          <div class="rm-field-single">
-            <label>Almacén *</label>
-            <select [(ngModel)]="selectedWarehouseId" (ngModelChange)="onWarehouseChange()">
-              <option [ngValue]="null">Selecciona un almacén</option>
-              @for (warehouse of availableWarehouses(); track warehouse.id) {
-                <option [ngValue]="warehouse.id">{{ warehouse.name }}</option>
-              }
-            </select>
-          </div>
-          <div class="rm-field-single">
-            <label>Cliente</label>
-            <select [(ngModel)]="selectedCustomerId">
-              <option [ngValue]="null">Cliente ocasional</option>
-              @for (customer of customers(); track customer.id) {
-                <option [ngValue]="customer.id">{{ customer.name }}</option>
-              }
-            </select>
           </div>
         </div>
 
@@ -298,7 +331,9 @@
                 (ngModelChange)="updatePaymentMethod(payment.id, $event)"
               >
                 <option value="Cash">Efectivo</option>
-                <option value="Card">Tarjeta</option>
+                <option value="Debit">Tarjeta de débito</option>
+                <option value="Credit">Tarjeta de crédito</option>
+                <option value="Transfer">Transferencia</option>
                 <option value="Other">Otro</option>
               </select>
               <input
@@ -393,6 +428,7 @@
                   <th>Fecha</th>
                   <th>Sucursal</th>
                   <th>Cliente</th>
+                  <th>Cajero</th>
                   <th style="text-align: right">Total</th>
                   <th>Estado</th>
                   <th style="text-align: center; width: 14%">Acciones</th>
@@ -405,11 +441,15 @@
                     <td>{{ sale.createdAt | date: 'short' }}</td>
                     <td>{{ sale.branchName || '—' }}</td>
                     <td>{{ sale.customerName || 'Cliente ocasional' }}</td>
+                    <td>{{ sale.username }}</td>
                     <td style="text-align: right">{{ sale.total | number: '1.2-2' }}</td>
                     <td>
                       <span class="status-badge" [class.cancelled]="sale.status === 'Cancelled'">
                         {{ sale.status === 'Cancelled' ? 'Cancelada' : (sale.status || '—') }}
                       </span>
+                      @if (sale.status === 'Cancelled' && sale.modifiedBy) {
+                        <span class="cancelled-by">por {{ sale.modifiedBy }}</span>
+                      }
                     </td>
                     <td>
                       <div class="actions-cell">

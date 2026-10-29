@@ -15,6 +15,7 @@ import { CompaniesService } from '../../../companies/services/companies.service'
 import { AuthService } from '../../../../core/services/auth.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { MAX_PAGE_SIZE, fetchAllPages } from '../../../../core/utils/fetch-all-pages.util';
+import { PAYMENT_METHOD_LABELS } from '../../../../core/constants/payment-methods';
 import { quantityDecimalsError, quantityStep } from '../../../../core/utils/quantity.util';
 import { ICashSession } from '../../../../core/models/cash-session.models';
 import { ICompany } from '../../../../core/models/company.models';
@@ -116,12 +117,6 @@ function buildReturnLines(sale: ISale, previousReturns: IReturn[]): IReturnLineF
   });
 }
 
-const REFUND_METHOD_LABELS: Record<RefundMethod, string> = {
-  Cash: 'Efectivo',
-  Card: 'Tarjeta',
-  Other: 'Otro'
-};
-
 @Component({
   selector: 'app-return-list',
   standalone: true,
@@ -138,7 +133,7 @@ export class ReturnListComponent implements OnInit {
   private readonly router = inject(Router);
   readonly authService = inject(AuthService);
 
-  readonly refundMethodLabels = REFUND_METHOD_LABELS;
+  readonly refundMethodLabels = PAYMENT_METHOD_LABELS;
 
   // ===== Turno de caja (necesario para procesar una devolución nueva) =====
   currentSession = signal<ICashSession | null>(null);

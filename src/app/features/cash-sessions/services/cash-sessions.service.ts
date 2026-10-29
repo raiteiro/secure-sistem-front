@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import {
   ICashSession,
+  ICashSessionCloseout,
   ICashSessionFilters,
   ICloseCashSessionRequest,
   IOpenCashSessionRequest
@@ -42,5 +43,10 @@ export class CashSessionsService {
 
   close(id: number, request: ICloseCashSessionRequest): Observable<ICashSession> {
     return this.http.post<ICashSession>(`${this.apiUrl}/${id}/close`, request);
+  }
+
+  /** Detalle imprimible del corte (movimientos + totales por método) — ver `ICashSessionCloseout` */
+  getCloseout(id: number): Observable<ICashSessionCloseout> {
+    return this.http.get<ICashSessionCloseout>(`${this.apiUrl}/${id}/closeout`);
   }
 }

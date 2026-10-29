@@ -14,12 +14,15 @@ import {
   ISalesByPeriodEntry,
   ISalesByPeriodFilters,
   ISalesByPeriodReport,
+  ISalesDetailFilters,
+  ISalesDetailReport,
   ITopProduct,
   ITopProductsFilters,
   ReportGroupBy
 } from '../../../../core/models/report.models';
+import { PAYMENT_METHOD_LABELS } from '../../../../core/constants/payment-methods';
 
-type ReportTab = 'sales' | 'products' | 'closeouts';
+type ReportTab = 'sales' | 'products' | 'closeouts' | 'detail';
 
 @Component({
   selector: 'app-report-list',
@@ -71,6 +74,16 @@ export class ReportListComponent implements OnInit {
   closeouts = signal<ICashierCloseout[]>([]);
   closeoutsLoading = signal(true);
 
+  // ===== Detalle de ventas =====
+  readonly paymentMethodLabels = PAYMENT_METHOD_LABELS;
+  detailFilters: { from: string; to: string; branchId: number | null } = {
+    from: '',
+    to: '',
+    branchId: null
+  };
+  salesDetail = signal<ISalesDetailReport | null>(null);
+  detailLoading = signal(true);
+
   ngOnInit(): void {
     this.branchesService.getAll().subscribe({
       next: (data) => this.branches.set(data),
@@ -84,10 +97,16 @@ export class ReportListComponent implements OnInit {
     this.loadSalesByPeriod();
     this.loadTopProducts();
     this.loadCashierCloseouts();
+    this.loadSalesDetail();
   }
 
   selectTab(tab: ReportTab): void {
     this.activeTab.set(tab);
+  }
+
+  /** Imprime el reporte de la pestaña activa — el `.receipt-print-area` de esa pestaña es lo único que queda visible (ver regla global `@media print` en styles.scss) */
+  onPrint(): void {
+    window.print();
   }
 
   branchName(branchId?: number | null): string {
@@ -98,6 +117,10 @@ export class ReportListComponent implements OnInit {
   /** revenue ya incluye taxAmount; el subtotal antes de impuesto no viene del backend */
   subtotalOf(product: ITopProduct): number {
     return product.revenue - product.taxAmount;
+  }
+
+  taxesTotal(taxes: { taxAmount: number }[]): number {
+    return taxes.reduce((sum, t) => sum + t.taxAmount, 0);
   }
 
   loadSalesByPeriod(): void {
@@ -175,6 +198,25 @@ export class ReportListComponent implements OnInit {
       },
       error: (e) => {
         this.closeoutsLoading.set(false);
+        this.notify.httpError(e);
+      }
+    });
+  }
+
+  loadSalesDetail(): void {
+    this.detailLoading.set(true);
+    const filters: ISalesDetailFilters = {
+      ...(this.detailFilters.from ? { from: this.detailFilters.from } : {}),
+      ...(this.detailFilters.to ? { to: this.detailFilters.to } : {}),
+      ...(this.detailFilters.branchId ? { branchId: this.detailFilters.branchId } : {})
+    };
+    this.reportsService.getSalesDetail(filters).subscribe({
+      next: (data) => {
+        this.salesDetail.set(data);
+        this.detailLoading.set(false);
+      },
+      error: (e) => {
+        this.detailLoading.set(false);
         this.notify.httpError(e);
       }
     });

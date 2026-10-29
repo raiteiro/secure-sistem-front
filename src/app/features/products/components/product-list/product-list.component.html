@@ -117,6 +117,12 @@
         </select>
       </div>
     </div>
+    @if (form.taxRateId) {
+      <div class="rm-field-single">
+        <label>Total con impuesto</label>
+        <input type="number" class="readonly-input" [ngModel]="priceWithTax()" disabled placeholder="Se calcula solo" />
+      </div>
+    }
     <div class="rm-field-single">
       <label>Categoría</label>
       <select [(ngModel)]="form.categoryId">
@@ -134,6 +140,15 @@
           <span class="rm-slider"></span>
         </label>
       </div>
+      @if (!form.isCombo) {
+        <div class="rm-switch-row">
+          <span class="rm-switch-label">Requiere existencias para venderse</span>
+          <label class="rm-toggle">
+            <input type="checkbox" [(ngModel)]="form.tracksStock" aria-label="Requiere existencias para venderse" />
+            <span class="rm-slider"></span>
+          </label>
+        </div>
+      }
     }
     @if (!isEdit() && authService.isSystemAdmin()) {
       <div class="rm-field-single">
@@ -259,6 +274,7 @@
       </div>
 
       <p-table #dt [value]="group.products" [loading]="loading()" [rowHover]="true"
+        [paginator]="true" [rows]="10" [rowsPerPageOptions]="[5, 10, 25, 50]" [paginatorDropdownAppendTo]="'body'"
         [globalFilterFields]="['name', 'sku', 'categoryName']" styleClass="p-datatable-sm">
         <ng-template pTemplate="header">
           <tr>
@@ -287,6 +303,7 @@
               @if (product.kind === 'Supply') { <span class="supply-badge" title="Insumo: no se vende, se usa para fabricar">Insumo</span> }
               @if (product.isManufactured) { <span class="manufactured-badge" title="Se fabrica con insumos en almacén">Fabricado</span> }
               @if (product.supplierIsConsignor) { <span class="consignor-badge" [title]="'Consignado por ' + product.supplierName">Consignación</span> }
+              @if (!product.tracksStock) { <span class="no-stock-badge" title="Se vende sin necesidad de existencias">Sin control de stock</span> }
             </td>
             <td><span class="product-sku">{{ product.sku || '—' }}</span></td>
             <td [title]="product.unitName">{{ product.unitAbbreviation }}</td>

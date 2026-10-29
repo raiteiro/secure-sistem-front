@@ -12,15 +12,18 @@ import { HasPermissionDirective } from '../../../../shared/directives/has-permis
 import { UsersService } from '../../services/users.service';
 import { RolesService } from '../../../roles/services/roles.service';
 import { CompaniesService } from '../../../companies/services/companies.service';
+import { BranchesService } from '../../../branches/services/branches.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import {
   IUser,
   ICreateUserRequest,
   IUpdateUserRequest,
-  IReassignCompanyRequest
+  IReassignCompanyRequest,
+  ISetUserCompanyAccessRequest
 } from '../../../../core/models/user.models';
 import { IRole } from '../../../../core/models/role.models';
 import { ICompany } from '../../../../core/models/company.models';
+import { IBranch } from '../../../../core/models/branch.models';
 import { NotificationService } from '../../../../core/services/notification.service';
 
 interface IUserForm {
@@ -31,6 +34,8 @@ interface IUserForm {
   lastName: string;
   phoneNumber: string;
   roleId: number;
+  /** null = sin asignar, puede abrir turno en cualquier caja de su empresa */
+  branchId: number | null;
   /** Solo se usa al crear, y solo si el que llama es admin de sistema */
   companyId: number | null;
 }
@@ -43,6 +48,7 @@ const EMPTY_FORM: IUserForm = {
   lastName: '',
   phoneNumber: '',
   roleId: 0,
+  branchId: null,
   companyId: null
 };
 
@@ -52,6 +58,12 @@ interface IReassignForm {
 }
 
 const EMPTY_REASSIGN_FORM: IReassignForm = { companyId: null, roleId: null };
+
+/** Una fila del modal "Empresas adicionales": empresa + el rol que tendrá ahí */
+interface ICompanyAccessGrantRow {
+  companyId: number | null;
+  roleId: number | null;
+}
 
 interface IUserGroup {
   companyId: number;
@@ -81,6 +93,7 @@ export class UserListComponent implements OnInit {
   private readonly usersService = inject(UsersService);
   private readonly rolesService = inject(RolesService);
   private readonly companiesService = inject(CompaniesService);
+  private readonly branchesService = inject(BranchesService);
   private readonly confirmService = inject(ConfirmationService);
   private readonly notify = inject(NotificationService);
   readonly authService = inject(AuthService);
@@ -89,6 +102,7 @@ export class UserListComponent implements OnInit {
   loading = signal(true);
   roles = signal<IRole[]>([]);
   companies = signal<ICompany[]>([]);
+  branches = signal<IBranch[]>([]);
 
   // Modal crear/editar
   showModal = false;
@@ -106,6 +120,18 @@ export class UserListComponent implements OnInit {
   reassignUsername = '';
   reassignForm: IReassignForm = { ...EMPTY_REASSIGN_FORM };
 
+  // Modal empresas adicionales (solo admin de sistema)
+  showCompanyAccessModal = false;
+  loadingCompanyAccess = signal(false);
+  savingCompanyAccess = signal(false);
+  companyAccessUserId = 0;
+  companyAccessUsername = '';
+  companyAccessHomeCompanyId: number | null = null;
+  companyAccessForm: { canSwitchCompany: boolean; grants: ICompanyAccessGrantRow[] } = {
+    canSwitchCompany: false,
+    grants: []
+  };
+
   // Modal contraseña temporal (tras restablecer)
   showTempPasswordModal = false;
   resettingPassword = signal(false);
@@ -119,6 +145,11 @@ export class UserListComponent implements OnInit {
     this.rolesService.getAll().subscribe({
       next: (data) => this.roles.set(data),
       error: () => this.notify.error('No se pudieron cargar los roles')
+    });
+
+    this.branchesService.getAll().subscribe({
+      next: (data) => this.branches.set(data),
+      error: () => this.notify.error('No se pudieron cargar las sucursales')
     });
 
     if (this.authService.isSystemAdmin()) {
@@ -188,6 +219,7 @@ export class UserListComponent implements OnInit {
       lastName: user.lastName,
       phoneNumber: user.phoneNumber,
       roleId: user.roleId,
+      branchId: user.branchId ?? null,
       companyId: null
     };
     this.showModal = true;
@@ -203,9 +235,20 @@ export class UserListComponent implements OnInit {
     return this.roles().filter((r) => r.companyId === targetCompanyId);
   }
 
-  /** Se llama al cambiar la empresa en el modal de creación: el rol elegido puede ya no ser válido */
+  /** Sucursales visibles en el selector del modal crear/editar, acotadas a la empresa objetivo */
+  availableBranches(): IBranch[] {
+    if (!this.authService.isSystemAdmin()) return this.branches();
+    const targetCompanyId = this.isEdit()
+      ? this.editUserCompanyId
+      : this.form.companyId ?? this.authService.currentUser()?.companyId ?? null;
+    if (!targetCompanyId) return this.branches();
+    return this.branches().filter((b) => b.companyId === targetCompanyId);
+  }
+
+  /** Se llama al cambiar la empresa en el modal de creación: el rol y la sucursal elegidos pueden ya no ser válidos */
   onCreateCompanyChange(): void {
     this.form.roleId = 0;
+    this.form.branchId = null;
   }
 
   /** Roles visibles en el selector del modal "Cambiar de empresa", acotados a la empresa destino */
@@ -332,13 +375,96 @@ export class UserListComponent implements OnInit {
     });
   }
 
+  // ===== Empresas adicionales (puede cambiar entre empresas) =====
+  onManageCompanyAccess(user: IUser): void {
+    this.companyAccessUserId = user.id;
+    this.companyAccessUsername = user.username;
+    this.companyAccessHomeCompanyId = user.companyId ?? null;
+    this.companyAccessForm = { canSwitchCompany: false, grants: [] };
+    this.showCompanyAccessModal = true;
+
+    this.loadingCompanyAccess.set(true);
+    this.usersService.getCompanyAccess(user.id).subscribe({
+      next: (data) => {
+        this.companyAccessForm = {
+          canSwitchCompany: data.canSwitchCompany,
+          grants: data.grants.map((g) => ({ companyId: g.companyId, roleId: g.roleId }))
+        };
+        this.loadingCompanyAccess.set(false);
+      },
+      error: (e) => {
+        this.loadingCompanyAccess.set(false);
+        this.showCompanyAccessModal = false;
+        this.notify.httpError(e);
+      }
+    });
+  }
+
+  /** Empresas que ya no están disponibles para elegir en una fila: la de origen del usuario y las que ya usa otra fila */
+  availableGrantCompanies(row: ICompanyAccessGrantRow): ICompany[] {
+    const usedElsewhere = new Set(
+      this.companyAccessForm.grants.filter((g) => g !== row && g.companyId !== null).map((g) => g.companyId)
+    );
+    return this.companies().filter(
+      (c) => c.id !== this.companyAccessHomeCompanyId && !usedElsewhere.has(c.id)
+    );
+  }
+
+  /** Roles disponibles para una fila, acotados a la empresa elegida en esa misma fila */
+  availableGrantRoles(row: ICompanyAccessGrantRow): IRole[] {
+    if (!row.companyId) return [];
+    return this.roles().filter((r) => r.companyId === row.companyId);
+  }
+
+  /** Al cambiar la empresa de una fila, el rol elegido puede ya no ser válido */
+  onGrantCompanyChange(row: ICompanyAccessGrantRow): void {
+    row.roleId = null;
+  }
+
+  addGrantRow(): void {
+    this.companyAccessForm.grants = [...this.companyAccessForm.grants, { companyId: null, roleId: null }];
+  }
+
+  removeGrantRow(row: ICompanyAccessGrantRow): void {
+    this.companyAccessForm.grants = this.companyAccessForm.grants.filter((g) => g !== row);
+  }
+
+  onSaveCompanyAccess(): void {
+    for (const row of this.companyAccessForm.grants) {
+      if (!row.companyId || !row.roleId) {
+        this.notify.warn('Completa la empresa y el rol de cada fila, o quítala con el botón de la derecha');
+        return;
+      }
+    }
+
+    const request: ISetUserCompanyAccessRequest = {
+      canSwitchCompany: this.companyAccessForm.canSwitchCompany,
+      grants: this.companyAccessForm.grants.map((g) => ({ companyId: g.companyId!, roleId: g.roleId! }))
+    };
+
+    this.savingCompanyAccess.set(true);
+    this.usersService.setCompanyAccess(this.companyAccessUserId, request).subscribe({
+      next: () => {
+        this.savingCompanyAccess.set(false);
+        this.showCompanyAccessModal = false;
+        this.notify.success('Acceso entre empresas actualizado');
+        this.loadUsers();
+      },
+      error: (e) => { this.savingCompanyAccess.set(false); this.notify.httpError(e); }
+    });
+  }
+
   private toCreateRequest(): ICreateUserRequest {
-    const { companyId, ...rest } = this.form;
-    return companyId ? { ...rest, companyId } : rest;
+    const { companyId, branchId, ...rest } = this.form;
+    return {
+      ...rest,
+      ...(companyId ? { companyId } : {}),
+      ...(branchId ? { branchId } : {})
+    };
   }
 
   private toUpdateRequest(): IUpdateUserRequest {
-    const { password, companyId, ...body } = this.form;
-    return body;
+    const { password, companyId, branchId, ...body } = this.form;
+    return { ...body, ...(branchId ? { branchId } : {}) };
   }
 }
