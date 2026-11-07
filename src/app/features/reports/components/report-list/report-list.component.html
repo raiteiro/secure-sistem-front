@@ -10,7 +10,10 @@
     <i class="pi pi-calendar"></i> Ventas por periodo
   </button>
   <button class="tab-btn" [class.active]="activeTab() === 'products'" (click)="selectTab('products')">
-    <i class="pi pi-star"></i> Productos más vendidos
+    <i class="pi pi-star"></i> Ventas por producto
+  </button>
+  <button class="tab-btn" [class.active]="activeTab() === 'tickets'" (click)="selectTab('tickets')">
+    <i class="pi pi-receipt"></i> Ventas por ticket
   </button>
   <button class="tab-btn" [class.active]="activeTab() === 'closeouts'" (click)="selectTab('closeouts')">
     <i class="pi pi-wallet"></i> Cortes de caja
@@ -53,7 +56,6 @@
     <div class="table-card"><div class="empty-state"><i class="pi pi-spinner pi-spin"></i><p>Cargando reporte...</p></div></div>
   } @else {
     @if (salesReport(); as report) {
-      <div class="receipt-print-area print-landscape">
       <div class="stats-row">
         <div class="stat-card">
           <div class="stat-icon"><i class="pi pi-shopping-cart"></i></div>
@@ -68,7 +70,10 @@
       <div class="table-card">
         <div class="table-toolbar">
           <span class="result-count">{{ report.periods.length }} periodo(s) — {{ report.from }} a {{ report.to }}</span>
-          <button class="btn-mini-print" (click)="onPrint()"><i class="pi pi-print"></i> Imprimir</button>
+          <button class="btn-mini-print" [disabled]="printingTab() === 'sales'" (click)="onPrint()">
+            @if (printingTab() === 'sales') { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-print"></i> }
+            Imprimir
+          </button>
         </div>
         <div class="table-scroll">
           @if (report.periods.length === 0) {
@@ -137,12 +142,11 @@
           }
         </div>
       </div>
-      </div>
     }
   }
 }
 
-<!-- ===== Productos más vendidos ===== -->
+<!-- ===== Ventas por producto ===== -->
 @if (activeTab() === 'products') {
   <div class="filters-bar">
     <div class="filter-field">
@@ -162,10 +166,6 @@
         }
       </select>
     </div>
-    <div class="filter-field">
-      <label>Límite</label>
-      <input type="number" class="filter-number" min="1" max="100" [(ngModel)]="productsFilters.limit" (ngModelChange)="loadTopProducts()" />
-    </div>
   </div>
 
   @if (productsLoading()) {
@@ -173,11 +173,13 @@
   } @else if (topProducts().length === 0) {
     <div class="table-card"><div class="empty-state"><i class="pi pi-star"></i><p>No hay productos vendidos en este rango</p></div></div>
   } @else {
-    <div class="receipt-print-area print-landscape">
     <div class="table-card">
       <div class="table-toolbar">
         <span class="result-count">{{ topProducts().length }} producto(s)</span>
-        <button class="btn-mini-print" (click)="onPrint()"><i class="pi pi-print"></i> Imprimir</button>
+        <button class="btn-mini-print" [disabled]="printingTab() === 'products'" (click)="onPrint()">
+          @if (printingTab() === 'products') { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-print"></i> }
+          Imprimir
+        </button>
       </div>
       <div class="table-scroll">
         <table class="history-table">
@@ -211,7 +213,139 @@
         </table>
       </div>
     </div>
+  }
+}
+
+<!-- ===== Ventas por ticket ===== -->
+@if (activeTab() === 'tickets') {
+  <div class="filters-bar">
+    <div class="filter-field">
+      <label>Desde</label>
+      <input type="date" class="filter-date" [(ngModel)]="ticketsFilters.from" (ngModelChange)="loadSalesByTicket()" />
     </div>
+    <div class="filter-field">
+      <label>Hasta</label>
+      <input type="date" class="filter-date" [(ngModel)]="ticketsFilters.to" (ngModelChange)="loadSalesByTicket()" />
+    </div>
+    <div class="filter-field">
+      <label>Sucursal</label>
+      <select class="filter-select" [(ngModel)]="ticketsFilters.branchId" (ngModelChange)="loadSalesByTicket()">
+        <option [ngValue]="null">Todas</option>
+        @for (branch of branches(); track branch.id) {
+          <option [ngValue]="branch.id">{{ branch.name }}</option>
+        }
+      </select>
+    </div>
+  </div>
+
+  @if (ticketsLoading()) {
+    <div class="table-card"><div class="empty-state"><i class="pi pi-spinner pi-spin"></i><p>Cargando reporte...</p></div></div>
+  } @else {
+    @if (salesByTicket(); as report) {
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-icon"><i class="pi pi-receipt"></i></div>
+          <div class="stat-info"><span class="stat-value">{{ report.ticketsCount | number: '1.0-0' }}</span><span class="stat-label">Tickets</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon"><i class="pi pi-dollar"></i></div>
+          <div class="stat-info"><span class="stat-value">{{ report.totalAmount | number: '1.2-2' }}</span><span class="stat-label">Monto total</span></div>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <span class="result-count">{{ report.ticketsCount }} ticket(s) — {{ report.from }} a {{ report.to }}</span>
+          <button class="btn-mini-print" [disabled]="printingTab() === 'tickets'" (click)="onPrint()">
+            @if (printingTab() === 'tickets') { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-print"></i> }
+            Imprimir
+          </button>
+        </div>
+        <div class="table-scroll">
+          @if (report.tickets.length === 0) {
+            <div class="empty-state"><i class="pi pi-receipt"></i><p>No hay ventas en este rango</p></div>
+          } @else {
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th style="width: 40px"></th>
+                  <th>Folio</th>
+                  <th>Fecha</th>
+                  <th>Sucursal</th>
+                  <th>Cajero</th>
+                  <th>Cliente</th>
+                  <th style="text-align: right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (ticket of report.tickets; track ticket.saleId) {
+                  <tr
+                    [class.expandable-row]="canExpandTicket(ticket)"
+                    (click)="canExpandTicket(ticket) && toggleTicket(ticket.saleId)"
+                  >
+                    <td style="text-align: center">
+                      @if (canExpandTicket(ticket)) {
+                        <i class="pi expand-toggle" [class.pi-chevron-down]="isTicketExpanded(ticket.saleId)" [class.pi-chevron-right]="!isTicketExpanded(ticket.saleId)"></i>
+                      }
+                    </td>
+                    <td class="folio-cell">#{{ ticket.folioNumber }}</td>
+                    <td>{{ ticket.createdAt | date: 'short' }}</td>
+                    <td>{{ ticket.branchName }}</td>
+                    <td>{{ ticket.username }}</td>
+                    <td>{{ ticket.customerName || '—' }}</td>
+                    <td style="text-align: right">{{ ticket.total | number: '1.2-2' }}</td>
+                  </tr>
+                  @if (canExpandTicket(ticket)) {
+                    <tr class="expanded-detail-row" [class.collapsed]="!isTicketExpanded(ticket.saleId)">
+                      <td colspan="7">
+                        <table class="nested-products-table">
+                          <thead>
+                            <tr>
+                              <th>Producto</th>
+                              <th style="text-align: right">Precio unit.</th>
+                              <th style="text-align: right">Cant.</th>
+                              <th style="text-align: right">Subtotal</th>
+                              <th style="text-align: right">Impuesto</th>
+                              <th style="text-align: right">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (item of ticket.items; track item.productName) {
+                              <tr>
+                                <td>
+                                  <span class="cart-product-name">{{ item.productName }}</span>
+                                  <span class="cart-product-sku">{{ item.sku || '—' }}</span>
+                                  @for (extra of item.extras; track extra.extraName) {
+                                    <span class="cart-product-extra">+ {{ extra.extraName }} ({{ extra.price | number: '1.2-2' }})</span>
+                                  }
+                                </td>
+                                <td style="text-align: right">{{ item.unitPrice | number: '1.2-2' }}</td>
+                                <td style="text-align: right">{{ item.quantity | number: '1.0-4' }}</td>
+                                <td style="text-align: right">{{ item.subtotal | number: '1.2-2' }}</td>
+                                <td style="text-align: right">{{ item.taxAmount | number: '1.2-2' }}</td>
+                                <td style="text-align: right">{{ item.total | number: '1.2-2' }}</td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                        @if (ticket.payments.length > 0) {
+                          <div class="ticket-payments-line">
+                            <i class="pi pi-wallet"></i>
+                            @for (payment of ticket.payments; track payment.method; let last = $last) {
+                              <span>{{ paymentMethodLabels[payment.method] || payment.method }}: {{ payment.amount | number: '1.2-2' }}</span>{{ last ? '' : ' • ' }}
+                            }
+                          </div>
+                        }
+                      </td>
+                    </tr>
+                  }
+                }
+              </tbody>
+            </table>
+          }
+        </div>
+      </div>
+    }
   }
 }
 
@@ -251,11 +385,13 @@
   } @else if (closeouts().length === 0) {
     <div class="table-card"><div class="empty-state"><i class="pi pi-wallet"></i><p>No hay cortes de caja en este rango</p></div></div>
   } @else {
-    <div class="receipt-print-area print-landscape">
     <div class="table-card">
       <div class="table-toolbar">
         <span class="result-count">{{ closeouts().length }} corte(s)</span>
-        <button class="btn-mini-print" (click)="onPrint()"><i class="pi pi-print"></i> Imprimir</button>
+        <button class="btn-mini-print" [disabled]="printingTab() === 'closeouts'" (click)="onPrint()">
+          @if (printingTab() === 'closeouts') { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-print"></i> }
+          Imprimir
+        </button>
       </div>
       <div class="table-scroll">
         <table class="history-table">
@@ -308,7 +444,6 @@
         </table>
       </div>
     </div>
-    </div>
   }
 }
 
@@ -338,11 +473,13 @@
     <div class="table-card"><div class="empty-state"><i class="pi pi-spinner pi-spin"></i><p>Cargando reporte...</p></div></div>
   } @else {
     @if (salesDetail(); as d) {
-    <div class="receipt-print-area print-landscape">
     <div class="table-card detail-report">
       <div class="table-toolbar">
         <span class="result-count">{{ d.from }} a {{ d.to }} — {{ d.transactionsCount }} venta(s)</span>
-        <button class="btn-mini-print" (click)="onPrint()"><i class="pi pi-print"></i> Imprimir</button>
+        <button class="btn-mini-print" [disabled]="printingTab() === 'detail'" (click)="onPrint()">
+          @if (printingTab() === 'detail') { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-print"></i> }
+          Imprimir
+        </button>
       </div>
 
       <div class="detail-section">
@@ -466,7 +603,6 @@
           </table>
         }
       </div>
-    </div>
     </div>
     }
   }

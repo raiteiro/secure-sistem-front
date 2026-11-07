@@ -94,6 +94,11 @@ export const routes: Routes = [
           import('./features/categories/categories.routes').then((m) => m.CATEGORIES_ROUTES)
       },
       {
+        path: 'catalogo/extras',
+        loadChildren: () =>
+          import('./features/product-extras/product-extras.routes').then((m) => m.PRODUCT_EXTRAS_ROUTES)
+      },
+      {
         path: 'catalogo/productos',
         loadChildren: () =>
           import('./features/products/products.routes').then((m) => m.PRODUCTS_ROUTES)

@@ -40,6 +40,15 @@
         <span class="kind-hint">Un insumo no se vende: se compra, se guarda en almacén y se usa para fabricar productos.</span>
       }
     </div>
+    @if (form.kind === 'Product') {
+      <div class="modal-tabs" role="tablist">
+        <button type="button" role="tab" class="modal-tab" [class.active]="modalTab === 'general'" (click)="modalTab = 'general'">General</button>
+        <button type="button" role="tab" class="modal-tab" [class.active]="modalTab === 'extras'" (click)="modalTab = 'extras'">
+          Extras @if (form.extraIds.length > 0) { <span class="modal-tab-count">{{ form.extraIds.length }}</span> }
+        </button>
+      </div>
+    }
+    @if (form.kind !== 'Product' || modalTab === 'general') {
     <div class="rm-row">
       <div class="rm-field">
         <label>Nombre *</label>
@@ -56,21 +65,13 @@
     </div>
     <div class="rm-field-single">
       <label>Proveedor</label>
-      <select [(ngModel)]="form.supplierId" (ngModelChange)="onSupplierChange()">
-        <option [ngValue]="null">Sin proveedor</option>
-        @for (supplier of availableSuppliers(); track supplier.id) {
-          <option [ngValue]="supplier.id">{{ supplier.name }}{{ supplier.isConsignor ? ' (consignador)' : '' }}</option>
-        }
-      </select>
+      <app-searchable-select [(ngModel)]="form.supplierId" (ngModelChange)="onSupplierChange()" [options]="supplierOptions()" searchPlaceholder="Buscar proveedor..." />
     </div>
     @if (selectedSupplierIsConsignor()) {
       <div class="rm-row">
         <div class="rm-field">
           <label>Tipo de comisión *</label>
-          <select [(ngModel)]="form.commissionType">
-            <option value="Percentage">% para la tienda</option>
-            <option value="FixedAmount">Monto fijo por unidad</option>
-          </select>
+          <app-searchable-select [(ngModel)]="form.commissionType" [options]="commissionTypeOptions" />
         </div>
         <div class="rm-field">
           <label>{{ form.commissionType === 'Percentage' ? 'Comisión de la tienda (%) *' : 'Pago al consignador por unidad *' }}</label>
@@ -99,22 +100,12 @@
     }
     <div class="rm-row">
       <div class="rm-field">
-        <label for="product-unit">Unidad *</label>
-        <select id="product-unit" [(ngModel)]="form.unitId">
-          <option [ngValue]="null">Selecciona una unidad</option>
-          @for (unit of availableUnits(); track unit.id) {
-            <option [ngValue]="unit.id">{{ unit.name }} ({{ unit.abbreviation }}){{ unit.decimalPlaces === 0 ? ' · enteros' : ' · ' + unit.decimalPlaces + ' dec.' }}</option>
-          }
-        </select>
+        <label>Unidad *</label>
+        <app-searchable-select [(ngModel)]="form.unitId" [options]="unitOptions()" placeholder="Selecciona una unidad" searchPlaceholder="Buscar unidad..." />
       </div>
       <div class="rm-field">
         <label>Impuesto</label>
-        <select [(ngModel)]="form.taxRateId">
-          <option [ngValue]="null">Sin impuesto</option>
-          @for (taxRate of availableTaxRates(); track taxRate.id) {
-            <option [ngValue]="taxRate.id">{{ taxRate.name }}</option>
-          }
-        </select>
+        <app-searchable-select [(ngModel)]="form.taxRateId" [options]="taxRateOptions()" />
       </div>
     </div>
     @if (form.taxRateId) {
@@ -125,13 +116,15 @@
     }
     <div class="rm-field-single">
       <label>Categoría</label>
-      <select [(ngModel)]="form.categoryId">
-        <option [ngValue]="null">Sin categoría</option>
-        @for (category of availableCategories(); track category.id) {
-          <option [ngValue]="category.id">{{ category.name }}</option>
-        }
-      </select>
+      <app-searchable-select [(ngModel)]="form.categoryId" [options]="categoryOptions()" searchPlaceholder="Buscar categoría..." />
     </div>
+    @if (form.kind === 'Product') {
+      <div class="rm-field-single">
+        <label>Almacenes visibles en el POS</label>
+        <app-multi-select [(ngModel)]="form.warehouseIds" [options]="warehouseOptions()" placeholder="Todos los almacenes" searchPlaceholder="Buscar almacén..." />
+        <span class="field-hint">Sin selección, el producto aparece en todos los almacenes de la empresa.</span>
+      </div>
+    }
     @if (form.kind === 'Product' && !editIsManufactured) {
       <div class="rm-switch-row">
         <span class="rm-switch-label">Es un combo/kit</span>
@@ -153,12 +146,7 @@
     @if (!isEdit() && authService.isSystemAdmin()) {
       <div class="rm-field-single">
         <label>Empresa</label>
-        <select [(ngModel)]="form.companyId" (ngModelChange)="onCompanyChange()">
-          <option [ngValue]="null">Mi empresa (por defecto)</option>
-          @for (company of companies(); track company.id) {
-            <option [ngValue]="company.id">{{ company.name }}</option>
-          }
-        </select>
+        <app-searchable-select [(ngModel)]="form.companyId" (ngModelChange)="onCompanyChange()" [options]="companyOptions()" searchPlaceholder="Buscar empresa..." />
       </div>
     }
     @if (isEdit()) {
@@ -176,8 +164,44 @@
             <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" [disabled]="uploadingImage()" (change)="onImageFileSelected($event)" hidden />
           </label>
         </div>
-        <span class="image-hint">PNG, JPEG, WEBP o GIF · máx. 2 MB</span>
+        <span class="field-hint">PNG, JPEG, WEBP o GIF · máx. 2 MB</span>
       </div>
+    }
+    }
+    @if (form.kind === 'Product' && modalTab === 'extras') {
+      @if (availableExtras().length === 0) {
+        <p class="combo-empty-hint">No hay extras en el catálogo todavía. Créalos primero en la pantalla "Extras".</p>
+      } @else {
+        <div class="rm-field-single">
+          <label>Agregar extra</label>
+          <select [(ngModel)]="extraToAdd" (ngModelChange)="onExtraSelected($event)">
+            <option [ngValue]="null">Selecciona un extra...</option>
+            @for (extra of extraOptionsToAdd(); track extra.value) {
+              <option [ngValue]="extra.value">{{ extra.label }}</option>
+            }
+          </select>
+        </div>
+        @if (addedExtras().length === 0) {
+          <p class="combo-empty-hint">Este producto todavía no tiene extras.</p>
+        } @else {
+          <table class="combo-items-table">
+            <thead>
+              <tr><th>Extra</th><th style="text-align: right">Precio</th><th style="width: 40px"></th></tr>
+            </thead>
+            <tbody>
+              @for (extra of addedExtras(); track extra.id) {
+                <tr>
+                  <td><span class="cart-product-name">{{ extra.name }}</span></td>
+                  <td style="text-align: right">+{{ extra.price | number: '1.2-2' }}</td>
+                  <td style="text-align: center">
+                    <button class="remove-item-btn" (click)="onRemoveExtra(extra.id)" title="Quitar"><i class="pi pi-times"></i></button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      }
     }
   </div>
   <div class="rm-footer">
@@ -200,12 +224,7 @@
     <div class="rm-row">
       <div class="rm-field">
         <label>Producto</label>
-        <select [(ngModel)]="comboAddProductId">
-          <option [ngValue]="null">Selecciona un producto</option>
-          @for (component of availableComboComponents(); track component.id) {
-            <option [ngValue]="component.id">{{ component.name }} @if (component.sku) { ({{ component.sku }}) }</option>
-          }
-        </select>
+        <app-searchable-select [(ngModel)]="comboAddProductId" [options]="comboComponentOptions()" placeholder="Selecciona un producto" searchPlaceholder="Buscar producto..." />
       </div>
       <div class="rm-field">
         <label>Cantidad</label>
@@ -286,6 +305,16 @@
             <th style="text-align: right">Precio</th>
             <th>Impuesto</th>
             <th style="text-align: center; width: 12%">Acciones</th>
+          </tr>
+          <tr class="col-filter-row">
+            <th></th>
+            <th><input type="text" class="col-filter-input" placeholder="Filtrar..." (input)="dt.filter($any($event.target).value, 'name', 'contains')" /></th>
+            <th><input type="text" class="col-filter-input" placeholder="Filtrar..." (input)="dt.filter($any($event.target).value, 'sku', 'contains')" /></th>
+            <th><input type="text" class="col-filter-input" placeholder="Filtrar..." (input)="dt.filter($any($event.target).value, 'unitAbbreviation', 'contains')" /></th>
+            <th><input type="text" class="col-filter-input" placeholder="Filtrar..." (input)="dt.filter($any($event.target).value, 'categoryName', 'contains')" /></th>
+            <th><input type="text" class="col-filter-input" placeholder="Filtrar..." (input)="dt.filter($any($event.target).value, 'price', 'contains')" /></th>
+            <th><input type="text" class="col-filter-input" placeholder="Filtrar..." (input)="dt.filter($any($event.target).value, 'taxRateName', 'contains')" /></th>
+            <th></th>
           </tr>
         </ng-template>
         <ng-template pTemplate="body" let-product>

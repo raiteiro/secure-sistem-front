@@ -6,11 +6,15 @@ import { DialogModule } from 'primeng/dialog';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ConfirmationService } from 'primeng/api';
 import { HasPermissionDirective } from '../../../../shared/directives/has-permission.directive';
+import { ISelectOption, SearchableSelectComponent } from '../../../../shared/components/searchable-select/searchable-select.component';
+import { MultiSelectComponent } from '../../../../shared/components/multi-select/multi-select.component';
 import { ProductsService } from '../../services/products.service';
 import { CategoriesService } from '../../../categories/services/categories.service';
 import { TaxRatesService } from '../../../tax-rates/services/tax-rates.service';
 import { CompaniesService } from '../../../companies/services/companies.service';
 import { SuppliersService } from '../../../suppliers/services/suppliers.service';
+import { WarehousesService } from '../../../warehouses/services/warehouses.service';
+import { ProductExtrasService } from '../../../product-extras/services/product-extras.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import {
   CommissionType,
@@ -24,6 +28,8 @@ import { ICategory } from '../../../../core/models/category.models';
 import { ITaxRate } from '../../../../core/models/tax-rate.models';
 import { ICompany } from '../../../../core/models/company.models';
 import { ISupplier } from '../../../../core/models/supplier.models';
+import { IWarehouse } from '../../../../core/models/warehouse.models';
+import { IProductExtra } from '../../../../core/models/product-extra.models';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { UnitsOfMeasureService } from '../../../units-of-measure/services/units-of-measure.service';
 import { IUnitOfMeasure } from '../../../../core/models/unit-of-measure.models';
@@ -46,6 +52,10 @@ interface IProductForm {
   supplierId: number | null;
   commissionType: CommissionType;
   commissionValue: number | null;
+  /** Almacenes donde debe aparecer en el POS. Vacío = sin restricción (todos) */
+  warehouseIds: number[];
+  /** Extras/adicionales que ofrece seleccionar en el POS */
+  extraIds: number[];
 }
 
 const EMPTY_FORM: IProductForm = {
@@ -63,7 +73,9 @@ const EMPTY_FORM: IProductForm = {
   tracksStock: true,
   supplierId: null,
   commissionType: 'Percentage',
-  commissionValue: null
+  commissionValue: null,
+  warehouseIds: [],
+  extraIds: []
 };
 
 interface IProductGroup {
@@ -85,7 +97,7 @@ const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 @Component({
   selector: 'app-product-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, TableModule, DialogModule, ConfirmDialogModule, HasPermissionDirective],
+  imports: [CommonModule, FormsModule, TableModule, DialogModule, ConfirmDialogModule, HasPermissionDirective, SearchableSelectComponent, MultiSelectComponent],
   providers: [ConfirmationService],
   templateUrl: './product-list.component.html',
   styleUrl: './product-list.component.scss'
@@ -96,6 +108,8 @@ export class ProductListComponent implements OnInit {
   private readonly taxRatesService = inject(TaxRatesService);
   private readonly companiesService = inject(CompaniesService);
   private readonly suppliersService = inject(SuppliersService);
+  private readonly warehousesService = inject(WarehousesService);
+  private readonly extrasService = inject(ProductExtrasService);
   private readonly unitsService = inject(UnitsOfMeasureService);
   private readonly confirmService = inject(ConfirmationService);
   private readonly notify = inject(NotificationService);
@@ -109,6 +123,8 @@ export class ProductListComponent implements OnInit {
   allCategories = signal<ICategory[]>([]);
   allTaxRates = signal<ITaxRate[]>([]);
   allSuppliers = signal<ISupplier[]>([]);
+  allWarehouses = signal<IWarehouse[]>([]);
+  allExtras = signal<IProductExtra[]>([]);
   /** Unidades activas del catálogo global */
   units = signal<IUnitOfMeasure[]>([]);
 
@@ -121,6 +137,10 @@ export class ProductListComponent implements OnInit {
   /** El producto en edición es fabricado: su tipo queda fijo en "Producto" y no puede ser combo */
   editIsManufactured = false;
   form: IProductForm = { ...EMPTY_FORM };
+  /** Pestaña activa del modal (solo aplica a Kind="Product"; un insumo no tiene pestaña de Extras) */
+  modalTab: 'general' | 'extras' = 'general';
+  /** Select transitorio de la pestaña Extras — se vacía solo al agregar (ver onExtraSelected) */
+  extraToAdd: number | null = null;
 
   // Imagen (solo disponible editando, requiere un id existente)
   uploadingImage = signal(false);
@@ -153,6 +173,14 @@ export class ProductListComponent implements OnInit {
     this.suppliersService.getAll().subscribe({
       next: (data) => this.allSuppliers.set(data),
       error: () => this.notify.error('No se pudieron cargar los proveedores')
+    });
+    this.warehousesService.getAll().subscribe({
+      next: (data) => this.allWarehouses.set(data),
+      error: () => this.notify.error('No se pudieron cargar los almacenes')
+    });
+    this.extrasService.getAll().subscribe({
+      next: (data) => this.allExtras.set(data),
+      error: () => this.notify.error('No se pudieron cargar los extras')
     });
 
     if (this.authService.isSystemAdmin()) {
@@ -238,22 +266,119 @@ export class ProductListComponent implements OnInit {
     return active.filter((s) => s.companyId === target);
   }
 
+  /** Almacenes activos de la empresa objetivo, para el multi-select de visibilidad en el POS */
+  availableWarehouses(): IWarehouse[] {
+    const target = this.targetCompanyId();
+    const active = this.allWarehouses().filter((w) => w.isActive);
+    if (!target) return active;
+    return active.filter((w) => w.companyId === target);
+  }
+
+  /** Extras activos de la empresa objetivo, para el multi-select de extras ofrecidos en el POS */
+  availableExtras(): IProductExtra[] {
+    const target = this.targetCompanyId();
+    const active = this.allExtras().filter((e) => e.isActive);
+    if (!target) return active;
+    return active.filter((e) => e.companyId === target);
+  }
+
   /** Si el proveedor elegido es consignador, hay que capturar tipo/valor de comisión */
   selectedSupplierIsConsignor(): boolean {
     if (!this.form.supplierId) return false;
     return this.availableSuppliers().find((s) => s.id === this.form.supplierId)?.isConsignor ?? false;
   }
 
+  readonly commissionTypeOptions: ISelectOption[] = [
+    { value: 'Percentage', label: '% para la tienda' },
+    { value: 'FixedAmount', label: 'Monto fijo por unidad' }
+  ];
+
+  unitOptions(): ISelectOption[] {
+    return this.availableUnits().map((u) => ({
+      value: u.id,
+      label: `${u.name} (${u.abbreviation})${u.decimalPlaces === 0 ? ' · enteros' : ' · ' + u.decimalPlaces + ' dec.'}`
+    }));
+  }
+
+  taxRateOptions(): ISelectOption[] {
+    return [
+      { value: null, label: 'Sin impuesto' },
+      ...this.availableTaxRates().map((t) => ({ value: t.id, label: t.name }))
+    ];
+  }
+
+  categoryOptions(): ISelectOption[] {
+    return [
+      { value: null, label: 'Sin categoría' },
+      ...this.availableCategories().map((c) => ({ value: c.id, label: c.name }))
+    ];
+  }
+
+  supplierOptions(): ISelectOption[] {
+    return [
+      { value: null, label: 'Sin proveedor' },
+      ...this.availableSuppliers().map((s) => ({ value: s.id, label: s.name + (s.isConsignor ? ' (consignador)' : '') }))
+    ];
+  }
+
+  warehouseOptions(): ISelectOption[] {
+    return this.availableWarehouses().map((w) => ({ value: w.id, label: w.name }));
+  }
+
+  /** Extras del select que todavía no están agregados a este producto */
+  extraOptionsToAdd(): ISelectOption[] {
+    return this.availableExtras()
+      .filter((e) => !this.form.extraIds.includes(e.id))
+      .map((e) => ({ value: e.id, label: `${e.name} (+${e.price.toFixed(2)})` }));
+  }
+
+  /** Extras ya agregados a este producto, resueltos a nombre/precio para la tabla */
+  addedExtras(): IProductExtra[] {
+    const byId = new Map(this.availableExtras().map((e) => [e.id, e]));
+    return this.form.extraIds.map((id) => byId.get(id)).filter((e): e is IProductExtra => !!e);
+  }
+
+  /** El select agrega de inmediato al elegir una opción — no hace falta botón "Agregar" */
+  onExtraSelected(extraId: number | null): void {
+    if (extraId === null || this.form.extraIds.includes(extraId)) return;
+    this.form.extraIds = [...this.form.extraIds, extraId];
+    this.extraToAdd = null;
+  }
+
+  onRemoveExtra(extraId: number): void {
+    this.form.extraIds = this.form.extraIds.filter((id) => id !== extraId);
+  }
+
+  companyOptions(): ISelectOption[] {
+    return [
+      { value: null, label: 'Mi empresa (por defecto)' },
+      ...this.companies().map((c) => ({ value: c.id, label: c.name }))
+    ];
+  }
+
+  comboComponentOptions(): ISelectOption[] {
+    return this.availableComboComponents().map((p) => ({
+      value: p.id,
+      label: p.name + (p.sku ? ` (${p.sku})` : '')
+    }));
+  }
+
   onCompanyChange(): void {
     this.form.categoryId = null;
     this.form.taxRateId = null;
     this.form.supplierId = null;
+    this.form.warehouseIds = [];
+    this.form.extraIds = [];
   }
 
   /** Al pasar a insumo se quitan las opciones que un insumo no admite (combo, proveedor consignador) */
   onKindChange(): void {
     if (this.form.kind !== 'Supply') return;
     this.form.isCombo = false;
+    this.form.warehouseIds = [];
+    this.form.extraIds = [];
+    this.modalTab = 'general';
+    this.extraToAdd = null;
     if (this.form.supplierId && !this.availableSuppliers().some((s) => s.id === this.form.supplierId)) {
       this.form.supplierId = null;
       this.onSupplierChange();
@@ -308,6 +433,8 @@ export class ProductListComponent implements OnInit {
     this.editCompanyId = null;
     this.editIsManufactured = false;
     this.imageUrl.set(null);
+    this.modalTab = 'general';
+    this.extraToAdd = null;
     this.showModal = true;
   }
 
@@ -331,9 +458,13 @@ export class ProductListComponent implements OnInit {
       tracksStock: product.tracksStock,
       supplierId: product.supplierId,
       commissionType: product.commissionType ?? 'Percentage',
-      commissionValue: product.commissionValue
+      commissionValue: product.commissionValue,
+      warehouseIds: [...product.warehouseIds],
+      extraIds: [...product.extraIds]
     };
     this.imageUrl.set(this.productsService.getImageUrl(product.imagePath));
+    this.modalTab = 'general';
+    this.extraToAdd = null;
     this.showModal = true;
   }
 
@@ -408,6 +539,9 @@ export class ProductListComponent implements OnInit {
       supplierId: this.form.supplierId,
       commissionType: isConsignor ? this.form.commissionType : null,
       commissionValue: isConsignor ? this.form.commissionValue : null,
+      // Un insumo nunca aparece en el POS, así que no tiene sentido restringirlo por almacén ni ofrecerle extras
+      warehouseIds: isSupply ? [] : this.form.warehouseIds,
+      extraIds: isSupply ? [] : this.form.extraIds,
       ...(this.form.companyId ? { companyId: this.form.companyId } : {})
     };
 

@@ -274,6 +274,16 @@
             <th>Sucursal</th>
             <th style="text-align: center">Acciones</th>
           </tr>
+          <tr class="col-filter-row">
+            <th><input type="text" class="col-filter-input" placeholder="Filtrar..." (input)="dt.filter($any($event.target).value, 'username', 'contains')" /></th>
+            <th><input type="text" class="col-filter-input" placeholder="Filtrar..." (input)="dt.filter($any($event.target).value, 'firstName', 'contains')" /></th>
+            <th><input type="text" class="col-filter-input" placeholder="Filtrar..." (input)="dt.filter($any($event.target).value, 'lastName', 'contains')" /></th>
+            <th><input type="text" class="col-filter-input" placeholder="Filtrar..." (input)="dt.filter($any($event.target).value, 'email', 'contains')" /></th>
+            <th><input type="text" class="col-filter-input" placeholder="Filtrar..." (input)="dt.filter($any($event.target).value, 'phoneNumber', 'contains')" /></th>
+            <th><input type="text" class="col-filter-input" placeholder="Filtrar..." (input)="dt.filter($any($event.target).value, 'roleName', 'contains')" /></th>
+            <th><input type="text" class="col-filter-input" placeholder="Filtrar..." (input)="dt.filter($any($event.target).value, 'branchName', 'contains')" /></th>
+            <th></th>
+          </tr>
         </ng-template>
 
         <ng-template pTemplate="body" let-user>

@@ -28,6 +28,37 @@
   </div>
 </p-dialog>
 
+<!-- MODAL: Reabrir turno -->
+<p-dialog [(visible)]="showReopenModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '420px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi pi-history"></i> Reabrir turno</div>
+    <button class="rm-close" (click)="showReopenModal = false"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    @if (reopenTarget) {
+      <p class="modal-item-label">{{ reopenTarget.cashRegisterName }}</p>
+      <p class="modal-item-sublabel">
+        Cerrado el {{ reopenTarget.closedAt | date: 'short' }} por {{ reopenTarget.modifiedBy }}
+      </p>
+    }
+    <p class="modal-item-sublabel">
+      El turno vuelve a quedar abierto y el monto esperado se recalcula al cerrarlo de nuevo.
+    </p>
+    <div class="rm-field-single">
+      <label>Motivo de la reapertura *</label>
+      <textarea [(ngModel)]="reopenForm.reason" rows="2" placeholder="ej: se cerró por error, faltó contar una venta..."></textarea>
+    </div>
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="showReopenModal = false">Cancelar</button>
+    <button class="rm-btn-save" (click)="onSaveReopen()" [disabled]="savingReopen">
+      @if (savingReopen) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-history"></i> }
+      Reabrir turno
+    </button>
+  </div>
+</p-dialog>
+
 <!-- MODAL: Corte de caja (imprimible) -->
 <p-dialog [(visible)]="showCloseoutModal" [modal]="true" [draggable]="false" [resizable]="false"
   [style]="{ width: '720px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">

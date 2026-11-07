@@ -87,6 +87,14 @@
             <th>Estado</th>
             <th style="text-align: center; width: 14%">Acciones</th>
           </tr>
+          <tr class="col-filter-row">
+            <th><input type="text" class="col-filter-input" placeholder="Filtrar..." (input)="dt.filter($any($event.target).value, 'productName', 'contains')" /></th>
+            <th><input type="text" class="col-filter-input" placeholder="Filtrar..." (input)="dt.filter($any($event.target).value, 'warehouseName', 'contains')" /></th>
+            <th></th>
+            <th></th>
+            <th></th>
+            <th></th>
+          </tr>
         </ng-template>
         <ng-template pTemplate="body" let-item>
           <tr>

@@ -8,13 +8,19 @@
   </div>
 
   <div class="table-scroll">
-    <p-table [value]="combos()" [loading]="loading()" [rowHover]="true" styleClass="p-datatable-sm">
+    <p-table #dt [value]="combos()" [loading]="loading()" [rowHover]="true" styleClass="p-datatable-sm">
       <ng-template pTemplate="header">
         <tr>
           <th>Combo</th>
           @if (showWarehouse()) { <th>Almacén</th> }
           <th style="text-align: right">Disponibles</th>
           <th>Componentes</th>
+        </tr>
+        <tr class="col-filter-row">
+          <th><input type="text" class="col-filter-input" placeholder="Filtrar..." (input)="dt.filter($any($event.target).value, 'comboProductName', 'contains')" /></th>
+          @if (showWarehouse()) { <th><input type="text" class="col-filter-input" placeholder="Filtrar..." (input)="dt.filter($any($event.target).value, 'warehouseName', 'contains')" /></th> }
+          <th></th>
+          <th></th>
         </tr>
       </ng-template>
       <ng-template pTemplate="body" let-combo>

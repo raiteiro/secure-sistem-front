@@ -7,7 +7,8 @@ import {
   ICashSessionCloseout,
   ICashSessionFilters,
   ICloseCashSessionRequest,
-  IOpenCashSessionRequest
+  IOpenCashSessionRequest,
+  IReopenCashSessionRequest
 } from '../../../core/models/cash-session.models';
 import { IPagedResult } from '../../../core/models/pagination.models';
 
@@ -43,6 +44,11 @@ export class CashSessionsService {
 
   close(id: number, request: ICloseCashSessionRequest): Observable<ICashSession> {
     return this.http.post<ICashSession>(`${this.apiUrl}/${id}/close`, request);
+  }
+
+  /** Reabre un turno ya cerrado (ej. cierre equivocado) — el caller debe pedir un motivo */
+  reopen(id: number, request: IReopenCashSessionRequest): Observable<ICashSession> {
+    return this.http.post<ICashSession>(`${this.apiUrl}/${id}/reopen`, request);
   }
 
   /** Detalle imprimible del corte (movimientos + totales por método) — ver `ICashSessionCloseout` */

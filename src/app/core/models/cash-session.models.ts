@@ -25,6 +25,10 @@ export interface ICashSession {
   createdBy: string;
   /** Quien lo cerró — null mientras siga abierto. Puede ser distinto de username/createdBy (cualquiera en la empresa puede cerrar un turno ajeno) */
   modifiedBy: string | null;
+  /** Se llenan si este turno se reabrió alguna vez (aunque ya se haya vuelto a cerrar) */
+  reopenedAt: string | null;
+  reopenedBy: string | null;
+  reopenReason: string | null;
 }
 
 /** Query params opcionales de GET /api/CashSessions. from/to son fechas (sin hora), filtran por openedAt */
@@ -45,6 +49,11 @@ export interface IOpenCashSessionRequest {
 export interface ICloseCashSessionRequest {
   closingAmount: number;
   notes?: string | null;
+}
+
+/** Body de POST /api/CashSessions/{id}/reopen */
+export interface IReopenCashSessionRequest {
+  reason: string;
 }
 
 /** Un renglón del listado de movimientos de GET /api/CashSessions/{id}/closeout */

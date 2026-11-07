@@ -10,6 +10,21 @@
   &:hover { border-color: var(--brand-button); color: var(--brand-button); }
 }
 
+// ===== Pestañas del modal de crear/editar producto =====
+.modal-tabs { display: flex; gap: 0.375rem; margin-bottom: 1.125rem; border-bottom: 1px solid #f0f0f5; }
+.modal-tab {
+  display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.625rem 0.25rem; margin-bottom: -1px;
+  border: none; border-bottom: 2px solid transparent; background: transparent;
+  font-size: 0.8125rem; font-weight: 600; color: #8c8c9e; cursor: pointer; transition: color 0.15s, border-color 0.15s;
+  & + & { margin-left: 0.75rem; }
+  &:hover { color: #1a1a2e; }
+  &.active { color: var(--brand-button); border-bottom-color: var(--brand-button); }
+}
+.modal-tab-count {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 0.25rem;
+  border-radius: 20px; background: rgba(var(--brand-button-rgb), 0.15); color: var(--brand-button);
+  font-size: 0.6875rem; font-weight: 700;
+}
 .image-upload-row { display: flex; align-items: center; gap: 1rem; }
 .image-preview {
   width: 56px; height: 56px; border-radius: 10px;
@@ -27,7 +42,7 @@
   &:hover { border-color: #9ca3af; }
   &.disabled { opacity: 0.6; cursor: not-allowed; pointer-events: none; }
 }
-.image-hint {
+.field-hint {
   display: block; margin-top: 0.375rem;
   font-size: 0.75rem; color: #9ca3af;
 }

@@ -10,6 +10,7 @@ import { ConfirmationService } from 'primeng/api';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { DialogModule } from 'primeng/dialog';
 import { HasPermissionDirective } from '../../../../shared/directives/has-permission.directive';
+import { TooltipDirective } from '../../../../shared/directives/tooltip.directive';
 import { PagerComponent } from '../../../../shared/components/pager/pager.component';
 import { CloseCashSessionDialogComponent } from '../../../../shared/components/close-cash-session-dialog/close-cash-session-dialog.component';
 import { SalesService } from '../../services/sales.service';
@@ -21,12 +22,14 @@ import { WarehousesService } from '../../../warehouses/services/warehouses.servi
 import { CustomersService } from '../../../customers/services/customers.service';
 import { CompaniesService } from '../../../companies/services/companies.service';
 import { InventoryService } from '../../../inventory/services/inventory.service';
+import { ProductExtrasService } from '../../../product-extras/services/product-extras.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { ICashSession } from '../../../../core/models/cash-session.models';
 import { IProduct } from '../../../../core/models/product.models';
 import { IBranch } from '../../../../core/models/branch.models';
 import { IWarehouse } from '../../../../core/models/warehouse.models';
+import { IProductExtra } from '../../../../core/models/product-extra.models';
 import { ICustomer } from '../../../../core/models/customer.models';
 import { ICompany } from '../../../../core/models/company.models';
 import {
@@ -73,7 +76,15 @@ interface IProductCatalogGroup {
   products: IProduct[];
 }
 
+interface ICartLineExtra {
+  id: number;
+  name: string;
+  price: number;
+}
+
 interface ICartLine {
+  /** Solo UI — identifica la línea (no el producto: el mismo producto con extras distintos son líneas separadas) */
+  lineId: number;
   productId: number;
   productName: string;
   productSku: string | null;
@@ -87,9 +98,13 @@ interface ICartLine {
    * solo la forma en que se captura en el POS, para no depender de que el cajero calcule a mano
    * cuánto es "15% de este producto" en pesos. */
   discountPercent: number;
+  /** Extras elegidos para esta línea (resueltos a nombre/precio al agregarla) */
+  extras: ICartLineExtra[];
 }
 
 interface ICartLineComputed extends ICartLine {
+  /** Suma de precios de los extras — por unidad, antes de multiplicar por quantity */
+  extrasUnitPrice: number;
   lineGross: number;
   discountAmount: number;
   lineSubtotal: number;
@@ -119,7 +134,7 @@ function round2(value: number): number {
 @Component({
   selector: 'app-sale-pos',
   standalone: true,
-  imports: [CommonModule, FormsModule, DialogModule, ConfirmDialogModule, HasPermissionDirective, PagerComponent, CloseCashSessionDialogComponent],
+  imports: [CommonModule, FormsModule, DialogModule, ConfirmDialogModule, HasPermissionDirective, TooltipDirective, PagerComponent, CloseCashSessionDialogComponent],
   providers: [ConfirmationService],
   templateUrl: './sale-pos.component.html',
   styleUrl: './sale-pos.component.scss'
@@ -135,6 +150,7 @@ export class SalePosComponent implements OnInit {
   private readonly customersService = inject(CustomersService);
   private readonly companiesService = inject(CompaniesService);
   private readonly inventoryService = inject(InventoryService);
+  private readonly extrasService = inject(ProductExtrasService);
   private readonly notify = inject(NotificationService);
   private readonly router = inject(Router);
   readonly authService = inject(AuthService);
@@ -152,6 +168,7 @@ export class SalePosComponent implements OnInit {
   warehouses = signal<IWarehouse[]>([]);
   customers = signal<ICustomer[]>([]);
   products = signal<IProduct[]>([]);
+  allExtras = signal<IProductExtra[]>([]);
 
   selectedBranchId: number | null = null;
   selectedWarehouseId: number | null = null;
@@ -162,8 +179,16 @@ export class SalePosComponent implements OnInit {
   categoryFilter = signal<number | null>(null);
 
   cartItems = signal<ICartLine[]>([]);
+  private nextCartLineId = 0;
   paymentLines = signal<IPaymentLine[]>([]);
   private nextPaymentLineId = 0;
+
+  // ===== Modal de extras al agregar un producto que ofrece alguno, o al editar los de una línea ya en el carrito =====
+  showExtrasModal = false;
+  extrasModalProduct: IProduct | null = null;
+  extrasModalSelected: number[] = [];
+  /** `null` = se está agregando una línea nueva; si no, es el `lineId` de la línea del carrito cuyos extras se están editando */
+  extrasModalEditingLineId: number | null = null;
 
   saving = signal(false);
 
@@ -275,6 +300,10 @@ export class SalePosComponent implements OnInit {
       // Los insumos no se venden (el backend rechaza la venta): no aparecen en el catálogo del POS
       next: (data) => this.products.set(data.filter((p) => p.companyId === companyId && p.isActive && p.kind !== 'Supply')),
       error: () => this.notify.error('No se pudieron cargar los productos')
+    });
+    this.extrasService.getAll().subscribe({
+      next: (data) => this.allExtras.set(data.filter((e) => e.companyId === companyId)),
+      error: () => this.notify.error('No se pudieron cargar los extras')
     });
   }
 
@@ -416,20 +445,27 @@ export class SalePosComponent implements OnInit {
     return this.warehouses().filter((w) => w.branchId === this.selectedBranchId || w.branchId === null);
   }
 
+  /** Catálogo visible en el almacén seleccionado — warehouseIds vacío = sin restricción, aparece en cualquiera */
+  private readonly warehouseVisibleProducts = computed<IProduct[]>(() => {
+    const warehouseId = this.stockWarehouseId();
+    if (warehouseId === null) return this.products();
+    return this.products().filter((p) => p.warehouseIds.length === 0 || p.warehouseIds.includes(warehouseId));
+  });
+
   readonly filteredProducts = computed<IProduct[]>(() => {
     const term = this.productSearch().trim().toLowerCase();
     const categoryId = this.categoryFilter();
-    return this.products().filter((p) => {
+    return this.warehouseVisibleProducts().filter((p) => {
       if (categoryId !== null && (p.categoryId ?? 0) !== categoryId) return false;
       if (!term) return true;
       return p.name.toLowerCase().includes(term) || (p.sku ?? '').toLowerCase().includes(term);
     });
   });
 
-  /** Categorías presentes en el catálogo de la empresa, para las píldoras de filtro */
+  /** Categorías presentes en el catálogo visible del almacén seleccionado, para las píldoras de filtro */
   readonly categoryChips = computed<IProductCategoryChip[]>(() => {
     const byId = new Map<number, string>();
-    for (const p of this.products()) {
+    for (const p of this.warehouseVisibleProducts()) {
       const id = p.categoryId ?? 0;
       byId.set(id, p.categoryName ?? 'Sin categoría');
     }
@@ -462,6 +498,16 @@ export class SalePosComponent implements OnInit {
   }
 
   // ===== Carrito =====
+  /** Extras activos que ofrece un producto, resueltos a nombre/precio */
+  extrasOfferedBy(product: IProduct): ICartLineExtra[] {
+    if (product.extraIds.length === 0) return [];
+    const byId = new Map(this.allExtras().map((e) => [e.id, e]));
+    return product.extraIds
+      .map((id) => byId.get(id))
+      .filter((e): e is IProductExtra => !!e && e.isActive)
+      .map((e) => ({ id: e.id, name: e.name, price: e.price }));
+  }
+
   addToCart(product: IProduct): void {
     if (!this.selectedWarehouseId) {
       this.notify.warn('Selecciona el almacén de donde sale la venta');
@@ -472,7 +518,81 @@ export class SalePosComponent implements OnInit {
       this.notify.warn(`Sin existencias de "${product.name}" en este almacén`);
       return;
     }
-    const existing = this.cartItems().find((line) => line.productId === product.id);
+
+    const offeredExtras = this.extrasOfferedBy(product);
+    if (offeredExtras.length > 0) {
+      this.extrasModalProduct = product;
+      this.extrasModalSelected = [];
+      this.extrasModalEditingLineId = null;
+      this.showExtrasModal = true;
+      return;
+    }
+
+    this.addLineToCart(product, available, []);
+  }
+
+  /** Solo tiene sentido ofrecer "editar extras" si el producto de esa línea realmente ofrece alguno */
+  canEditLineExtras(line: ICartLine): boolean {
+    const product = this.products().find((p) => p.id === line.productId);
+    return !!product && this.extrasOfferedBy(product).length > 0;
+  }
+
+  /** Abre el mismo modal de extras, pero precargado con los de una línea que ya está en el carrito */
+  onEditLineExtras(line: ICartLine): void {
+    const product = this.products().find((p) => p.id === line.productId);
+    if (!product) return;
+    this.extrasModalProduct = product;
+    this.extrasModalSelected = line.extras.map((e) => e.id);
+    this.extrasModalEditingLineId = line.lineId;
+    this.showExtrasModal = true;
+  }
+
+  closeExtrasModal(): void {
+    this.showExtrasModal = false;
+    this.extrasModalEditingLineId = null;
+  }
+
+  isExtraSelected(extraId: number): boolean {
+    return this.extrasModalSelected.includes(extraId);
+  }
+
+  toggleExtraSelection(extraId: number): void {
+    this.extrasModalSelected = this.isExtraSelected(extraId)
+      ? this.extrasModalSelected.filter((id) => id !== extraId)
+      : [...this.extrasModalSelected, extraId];
+  }
+
+  confirmAddWithExtras(): void {
+    const product = this.extrasModalProduct;
+    if (!product) return;
+    const selected = this.extrasOfferedBy(product).filter((e) => this.isExtraSelected(e.id));
+
+    if (this.extrasModalEditingLineId !== null) {
+      const lineId = this.extrasModalEditingLineId;
+      this.cartItems.update((lines) => lines.map((l) => (l.lineId === lineId ? { ...l, extras: selected } : l)));
+      this.closeExtrasModal();
+      return;
+    }
+
+    const available = this.availableFor(product.id);
+    if (available <= 0) {
+      this.notify.warn(`Sin existencias de "${product.name}" en este almacén`);
+      this.showExtrasModal = false;
+      return;
+    }
+    this.addLineToCart(product, available, selected);
+    this.showExtrasModal = false;
+  }
+
+  /** Agrega una línea nueva, o suma cantidad a una existente si el producto Y los mismos extras ya están en el carrito */
+  private addLineToCart(product: IProduct, available: number, extras: ICartLineExtra[]): void {
+    const extraIds = extras.map((e) => e.id).sort((a, b) => a - b);
+    const existing = this.cartItems().find(
+      (line) =>
+        line.productId === product.id &&
+        line.extras.length === extraIds.length &&
+        line.extras.every((e) => extraIds.includes(e.id))
+    );
     if (existing) {
       this.updateQuantity(existing, existing.quantity + 1);
       return;
@@ -480,6 +600,7 @@ export class SalePosComponent implements OnInit {
     this.cartItems.update((lines) => [
       ...lines,
       {
+        lineId: this.nextCartLineId++,
         productId: product.id,
         productName: product.name,
         productSku: product.sku,
@@ -489,7 +610,8 @@ export class SalePosComponent implements OnInit {
         unitDecimalPlaces: product.unitDecimalPlaces,
         // Con stock fraccionario (ej. 0.5 kg) se agrega lo que haya
         quantity: Math.min(1, available),
-        discountPercent: 0
+        discountPercent: 0,
+        extras
       }
     ]);
   }
@@ -514,29 +636,30 @@ export class SalePosComponent implements OnInit {
       quantity = max;
     }
     this.cartItems.update((lines) =>
-      lines.map((l) => (l.productId === line.productId ? { ...l, quantity } : l))
+      lines.map((l) => (l.lineId === line.lineId ? { ...l, quantity } : l))
     );
   }
 
   updateDiscount(line: ICartLine, discountPercent: number): void {
     const clamped = Math.min(Math.max(discountPercent || 0, 0), 100);
     this.cartItems.update((lines) =>
-      lines.map((l) => (l.productId === line.productId ? { ...l, discountPercent: clamped } : l))
+      lines.map((l) => (l.lineId === line.lineId ? { ...l, discountPercent: clamped } : l))
     );
   }
 
   removeLine(line: ICartLine): void {
-    this.cartItems.update((lines) => lines.filter((l) => l.productId !== line.productId));
+    this.cartItems.update((lines) => lines.filter((l) => l.lineId !== line.lineId));
   }
 
   readonly cartComputed = computed<ICartLineComputed[]>(() =>
     this.cartItems().map((line) => {
-      const lineGross = round2(line.quantity * line.price);
+      const extrasUnitPrice = line.extras.reduce((sum, e) => sum + e.price, 0);
+      const lineGross = round2(line.quantity * (line.price + extrasUnitPrice));
       const discountAmount = round2(lineGross * (line.discountPercent / 100));
       const lineSubtotal = round2(lineGross - discountAmount);
       const lineTax = round2(lineSubtotal * (line.taxRateValue ?? 0));
       const lineTotal = round2(lineSubtotal + lineTax);
-      return { ...line, lineGross, discountAmount, lineSubtotal, lineTax, lineTotal };
+      return { ...line, extrasUnitPrice, lineGross, discountAmount, lineSubtotal, lineTax, lineTotal };
     })
   );
 
@@ -615,11 +738,15 @@ export class SalePosComponent implements OnInit {
       warehouseId: this.selectedWarehouseId,
       cashSessionId: this.currentSession()!.id,
       customerId: this.selectedCustomerId,
-      items: this.cartItems().map((line) => ({
-        productId: line.productId,
-        quantity: line.quantity,
-        discountAmount: round2(line.price * line.quantity * (line.discountPercent / 100))
-      })),
+      items: this.cartItems().map((line) => {
+        const extrasUnitPrice = line.extras.reduce((sum, e) => sum + e.price, 0);
+        return {
+          productId: line.productId,
+          quantity: line.quantity,
+          discountAmount: round2((line.price + extrasUnitPrice) * line.quantity * (line.discountPercent / 100)),
+          extraIds: line.extras.map((e) => e.id)
+        };
+      }),
       payments: this.paymentLines().map((p) => ({ method: p.method, amount: p.amount }))
     };
 

@@ -1,4 +1,5 @@
 export const environment = {
   production: true,
-  apiUrl: '/api'
+  apiUrl: 'https://corepvback.nokmosis.net/api',
+  ws_url: 'https://corepvback.nokmosis.net'
 };

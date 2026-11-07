@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { DialogModule } from 'primeng/dialog';
 import { CashSessionsService } from '../../../features/cash-sessions/services/cash-sessions.service';
 import { CompaniesService } from '../../../features/companies/services/companies.service';
-import { ICashSession, ICashSessionCloseout, ICloseCashSessionRequest } from '../../../core/models/cash-session.models';
+import { ICashSession, ICashSessionCloseout, ICloseCashSessionRequest, IReopenCashSessionRequest } from '../../../core/models/cash-session.models';
 import { NotificationService } from '../../../core/services/notification.service';
 import { PAYMENT_METHOD_LABELS } from '../../../core/constants/payment-methods';
 
@@ -32,12 +32,21 @@ export class CloseCashSessionDialogComponent {
   /** Se emite cuando el cierre ya se guardó, con el turno cerrado — el padre recarga su propio estado */
   @Output() closed = new EventEmitter<ICashSession>();
 
+  /** Se emite cuando un turno (cualquiera, no necesariamente `session`) ya se reabrió */
+  @Output() reopened = new EventEmitter<ICashSession>();
+
   readonly paymentMethodLabels = PAYMENT_METHOD_LABELS;
 
   // ===== Modal: cerrar turno =====
   showCloseModal = false;
   savingClose = false;
   closeForm: { closingAmount: number | null; notes: string } = { closingAmount: null, notes: '' };
+
+  // ===== Modal: reabrir turno =====
+  showReopenModal = false;
+  savingReopen = false;
+  reopenTarget: ICashSession | null = null;
+  reopenForm: { reason: string } = { reason: '' };
 
   // ===== Modal: corte de caja (imprimible) =====
   showCloseoutModal = false;
@@ -82,6 +91,36 @@ export class CloseCashSessionDialogComponent {
   /** Reimprimir el corte de un turno ya cerrado (ej. desde un historial) */
   reprint(cashSessionId: number): void {
     this.loadAndPrintCloseout(cashSessionId, false);
+  }
+
+  /** Abre el formulario de reapertura para un turno cerrado del historial (requiere motivo) */
+  openReopen(target: ICashSession): void {
+    this.reopenTarget = target;
+    this.reopenForm = { reason: '' };
+    this.showReopenModal = true;
+  }
+
+  onSaveReopen(): void {
+    const target = this.reopenTarget;
+    if (!target) return;
+    const reason = this.reopenForm.reason.trim();
+    if (reason.length < 3) {
+      this.notify.warn('Explica brevemente por qué se reabre este turno');
+      return;
+    }
+
+    const request: IReopenCashSessionRequest = { reason };
+
+    this.savingReopen = true;
+    this.sessionsService.reopen(target.id, request).subscribe({
+      next: (reopened) => {
+        this.savingReopen = false;
+        this.showReopenModal = false;
+        this.notify.success('Turno reabierto');
+        this.reopened.emit(reopened);
+      },
+      error: (e) => { this.savingReopen = false; this.notify.httpError(e); }
+    });
   }
 
   private loadAndPrintCloseout(cashSessionId: number, autoPrint: boolean): void {

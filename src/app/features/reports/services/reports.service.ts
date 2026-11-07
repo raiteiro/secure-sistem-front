@@ -7,6 +7,8 @@ import {
   ICashierCloseoutFilters,
   ISalesByPeriodFilters,
   ISalesByPeriodReport,
+  ISalesByTicketFilters,
+  ISalesByTicketReport,
   ISalesDetailFilters,
   ISalesDetailReport,
   ITopProduct,
@@ -30,14 +32,22 @@ export class ReportsService {
     return this.http.get<ISalesByPeriodReport>(`${this.apiUrl}/sales-by-period`, { params });
   }
 
-  /** Todos los filtros son opcionales */
+  /** "Ventas por producto". Todos los filtros son opcionales */
   getTopProducts(filters?: ITopProductsFilters): Observable<ITopProduct[]> {
     let params = new HttpParams();
     if (filters?.from) params = params.set('from', filters.from);
     if (filters?.to) params = params.set('to', filters.to);
     if (filters?.branchId) params = params.set('branchId', filters.branchId);
-    if (filters?.limit) params = params.set('limit', filters.limit);
     return this.http.get<ITopProduct[]>(`${this.apiUrl}/top-products`, { params });
+  }
+
+  /** "Ventas por ticket". Todos los filtros son opcionales. Sin from/to → mes en curso a la fecha */
+  getSalesByTicket(filters?: ISalesByTicketFilters): Observable<ISalesByTicketReport> {
+    let params = new HttpParams();
+    if (filters?.from) params = params.set('from', filters.from);
+    if (filters?.to) params = params.set('to', filters.to);
+    if (filters?.branchId) params = params.set('branchId', filters.branchId);
+    return this.http.get<ISalesByTicketReport>(`${this.apiUrl}/sales-by-ticket`, { params });
   }
 
   /** Todos los filtros son opcionales. from/to filtran por closedAt (solo turnos ya cerrados) */
@@ -64,5 +74,48 @@ export class ReportsService {
     if (filters?.to) params = params.set('to', filters.to);
     if (filters?.branchId) params = params.set('branchId', filters.branchId);
     return this.http.get<ISalesDetailReport>(`${this.apiUrl}/sales-detail`, { params });
+  }
+
+  /** PDF con el mismo look para los 4 reportes, generado en el backend (QuestPDF) — ver CLAUDE.md "Reportes". */
+  getSalesByPeriodPdf(filters?: ISalesByPeriodFilters): Observable<Blob> {
+    let params = new HttpParams();
+    if (filters?.from) params = params.set('from', filters.from);
+    if (filters?.to) params = params.set('to', filters.to);
+    if (filters?.branchId) params = params.set('branchId', filters.branchId);
+    if (filters?.groupBy) params = params.set('groupBy', filters.groupBy);
+    return this.http.get(`${this.apiUrl}/sales-by-period/pdf`, { params, responseType: 'blob' });
+  }
+
+  getTopProductsPdf(filters?: ITopProductsFilters): Observable<Blob> {
+    let params = new HttpParams();
+    if (filters?.from) params = params.set('from', filters.from);
+    if (filters?.to) params = params.set('to', filters.to);
+    if (filters?.branchId) params = params.set('branchId', filters.branchId);
+    return this.http.get(`${this.apiUrl}/top-products/pdf`, { params, responseType: 'blob' });
+  }
+
+  getSalesByTicketPdf(filters?: ISalesByTicketFilters): Observable<Blob> {
+    let params = new HttpParams();
+    if (filters?.from) params = params.set('from', filters.from);
+    if (filters?.to) params = params.set('to', filters.to);
+    if (filters?.branchId) params = params.set('branchId', filters.branchId);
+    return this.http.get(`${this.apiUrl}/sales-by-ticket/pdf`, { params, responseType: 'blob' });
+  }
+
+  getCashierCloseoutsPdf(filters?: ICashierCloseoutFilters): Observable<Blob> {
+    let params = new HttpParams();
+    if (filters?.from) params = params.set('from', filters.from);
+    if (filters?.to) params = params.set('to', filters.to);
+    if (filters?.userId) params = params.set('userId', filters.userId);
+    if (filters?.branchId) params = params.set('branchId', filters.branchId);
+    return this.http.get(`${this.apiUrl}/cashier-closeouts/pdf`, { params, responseType: 'blob' });
+  }
+
+  getSalesDetailPdf(filters?: ISalesDetailFilters): Observable<Blob> {
+    let params = new HttpParams();
+    if (filters?.from) params = params.set('from', filters.from);
+    if (filters?.to) params = params.set('to', filters.to);
+    if (filters?.branchId) params = params.set('branchId', filters.branchId);
+    return this.http.get(`${this.apiUrl}/sales-detail/pdf`, { params, responseType: 'blob' });
   }
 }

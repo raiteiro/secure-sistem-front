@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { DialogModule } from 'primeng/dialog';
 import { HasPermissionDirective } from '../../../../shared/directives/has-permission.directive';
+import { TooltipDirective } from '../../../../shared/directives/tooltip.directive';
 import { PagerComponent } from '../../../../shared/components/pager/pager.component';
 import { CloseCashSessionDialogComponent } from '../../../../shared/components/close-cash-session-dialog/close-cash-session-dialog.component';
 import { CashSessionsService } from '../../services/cash-sessions.service';
@@ -29,7 +30,7 @@ interface ICashSessionGroup {
 @Component({
   selector: 'app-cash-session-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, DialogModule, HasPermissionDirective, PagerComponent, CloseCashSessionDialogComponent],
+  imports: [CommonModule, FormsModule, DialogModule, HasPermissionDirective, TooltipDirective, PagerComponent, CloseCashSessionDialogComponent],
   templateUrl: './cash-session-list.component.html',
   styleUrl: './cash-session-list.component.scss'
 })
@@ -201,6 +202,14 @@ export class CashSessionListComponent implements OnInit {
 
   /** El turno se cerró desde el diálogo compartido — recargar estado actual, historial y cajas */
   onSessionClosed(): void {
+    this.loadCurrent();
+    this.page.set(1);
+    this.loadHistory();
+    this.loadCashRegisters();
+  }
+
+  /** Un turno del historial se reabrió — mismo refresco que al cerrar uno */
+  onSessionReopened(): void {
     this.loadCurrent();
     this.page.set(1);
     this.loadHistory();

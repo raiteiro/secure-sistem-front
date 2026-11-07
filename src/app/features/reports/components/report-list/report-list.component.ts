@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Observable } from 'rxjs';
 import { ReportsService } from '../../services/reports.service';
 import { BranchesService } from '../../../branches/services/branches.service';
 import { UsersService } from '../../../users/services/users.service';
@@ -14,6 +15,9 @@ import {
   ISalesByPeriodEntry,
   ISalesByPeriodFilters,
   ISalesByPeriodReport,
+  ISalesByTicketFilters,
+  ISalesByTicketReport,
+  ISalesByTicketRow,
   ISalesDetailFilters,
   ISalesDetailReport,
   ITopProduct,
@@ -22,7 +26,7 @@ import {
 } from '../../../../core/models/report.models';
 import { PAYMENT_METHOD_LABELS } from '../../../../core/constants/payment-methods';
 
-type ReportTab = 'sales' | 'products' | 'closeouts' | 'detail';
+type ReportTab = 'sales' | 'products' | 'tickets' | 'closeouts' | 'detail';
 
 @Component({
   selector: 'app-report-list',
@@ -54,15 +58,24 @@ export class ReportListComponent implements OnInit {
   salesLoading = signal(true);
   expandedPeriods = signal<Set<string>>(new Set());
 
-  // ===== Productos más vendidos =====
-  productsFilters: { from: string; to: string; branchId: number | null; limit: number } = {
+  // ===== Ventas por producto =====
+  productsFilters: { from: string; to: string; branchId: number | null } = {
     from: '',
     to: '',
-    branchId: null,
-    limit: 10
+    branchId: null
   };
   topProducts = signal<ITopProduct[]>([]);
   productsLoading = signal(true);
+
+  // ===== Ventas por ticket =====
+  ticketsFilters: { from: string; to: string; branchId: number | null } = {
+    from: '',
+    to: '',
+    branchId: null
+  };
+  salesByTicket = signal<ISalesByTicketReport | null>(null);
+  ticketsLoading = signal(true);
+  expandedTickets = signal<Set<number>>(new Set());
 
   // ===== Cortes de caja =====
   closeoutsFilters: { from: string; to: string; branchId: number | null; userId: number | null } = {
@@ -84,6 +97,9 @@ export class ReportListComponent implements OnInit {
   salesDetail = signal<ISalesDetailReport | null>(null);
   detailLoading = signal(true);
 
+  /** Tab cuyo PDF se está generando en el backend — null si ninguno */
+  printingTab = signal<ReportTab | null>(null);
+
   ngOnInit(): void {
     this.branchesService.getAll().subscribe({
       next: (data) => this.branches.set(data),
@@ -96,6 +112,7 @@ export class ReportListComponent implements OnInit {
 
     this.loadSalesByPeriod();
     this.loadTopProducts();
+    this.loadSalesByTicket();
     this.loadCashierCloseouts();
     this.loadSalesDetail();
   }
@@ -104,9 +121,66 @@ export class ReportListComponent implements OnInit {
     this.activeTab.set(tab);
   }
 
-  /** Imprime el reporte de la pestaña activa — el `.receipt-print-area` de esa pestaña es lo único que queda visible (ver regla global `@media print` en styles.scss) */
+  /**
+   * Genera el PDF del reporte de la pestaña activa en el backend (QuestPDF) y lo abre en
+   * una pestaña nueva — desde el visor nativo del navegador el usuario imprime o guarda.
+   * Abre la pestaña en blanco de inmediato (antes de que responda el backend) porque los
+   * navegadores bloquean `window.open` si se llama después de que resuelve una promesa/
+   * observable async; luego solo se le asigna la URL del PDF ya generado.
+   */
   onPrint(): void {
-    window.print();
+    const tab = this.activeTab();
+    this.printingTab.set(tab);
+    const popup = window.open('', '_blank');
+
+    this.pdfFor(tab).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        if (popup) {
+          popup.location.href = url;
+        } else {
+          window.open(url, '_blank');
+        }
+        this.printingTab.set(null);
+      },
+      error: (e) => {
+        popup?.close();
+        this.printingTab.set(null);
+        this.notifyPdfError(e);
+      }
+    });
+  }
+
+  private pdfFor(tab: ReportTab): Observable<Blob> {
+    switch (tab) {
+      case 'sales':
+        return this.reportsService.getSalesByPeriodPdf(this.buildSalesFilters());
+      case 'products':
+        return this.reportsService.getTopProductsPdf(this.buildProductsFilters());
+      case 'tickets':
+        return this.reportsService.getSalesByTicketPdf(this.buildTicketsFilters());
+      case 'closeouts':
+        return this.reportsService.getCashierCloseoutsPdf(this.buildCloseoutsFilters());
+      case 'detail':
+        return this.reportsService.getSalesDetailPdf(this.buildDetailFilters());
+    }
+  }
+
+  /** `responseType: 'blob'` hace que un error también llegue como Blob en vez de JSON ya parseado — hay que leerlo aparte. */
+  private notifyPdfError(err: unknown): void {
+    const errorBody = (err as { error?: unknown })?.error;
+    if (errorBody instanceof Blob && errorBody.type.includes('json')) {
+      errorBody.text().then((text) => {
+        try {
+          const parsed = JSON.parse(text) as { message?: string };
+          this.notify.error(parsed.message ?? 'No se pudo generar el PDF');
+        } catch {
+          this.notify.error('No se pudo generar el PDF');
+        }
+      });
+    } else {
+      this.notify.httpError(err, 'No se pudo generar el PDF');
+    }
   }
 
   branchName(branchId?: number | null): string {
@@ -123,16 +197,19 @@ export class ReportListComponent implements OnInit {
     return taxes.reduce((sum, t) => sum + t.taxAmount, 0);
   }
 
-  loadSalesByPeriod(): void {
-    this.salesLoading.set(true);
-    this.expandedPeriods.set(new Set());
-    const filters: ISalesByPeriodFilters = {
+  private buildSalesFilters(): ISalesByPeriodFilters {
+    return {
       ...(this.salesFilters.from ? { from: this.salesFilters.from } : {}),
       ...(this.salesFilters.to ? { to: this.salesFilters.to } : {}),
       ...(this.salesFilters.branchId ? { branchId: this.salesFilters.branchId } : {}),
       groupBy: this.salesFilters.groupBy
     };
-    this.reportsService.getSalesByPeriod(filters).subscribe({
+  }
+
+  loadSalesByPeriod(): void {
+    this.salesLoading.set(true);
+    this.expandedPeriods.set(new Set());
+    this.reportsService.getSalesByPeriod(this.buildSalesFilters()).subscribe({
       next: (data) => {
         this.salesReport.set(data);
         this.salesLoading.set(false);
@@ -162,16 +239,17 @@ export class ReportListComponent implements OnInit {
     this.expandedPeriods.set(expanded);
   }
 
-  loadTopProducts(): void {
-    this.productsFilters.limit = Math.min(Math.max(this.productsFilters.limit || 10, 1), 100);
-    this.productsLoading.set(true);
-    const filters: ITopProductsFilters = {
+  private buildProductsFilters(): ITopProductsFilters {
+    return {
       ...(this.productsFilters.from ? { from: this.productsFilters.from } : {}),
       ...(this.productsFilters.to ? { to: this.productsFilters.to } : {}),
-      ...(this.productsFilters.branchId ? { branchId: this.productsFilters.branchId } : {}),
-      limit: this.productsFilters.limit
+      ...(this.productsFilters.branchId ? { branchId: this.productsFilters.branchId } : {})
     };
-    this.reportsService.getTopProducts(filters).subscribe({
+  }
+
+  loadTopProducts(): void {
+    this.productsLoading.set(true);
+    this.reportsService.getTopProducts(this.buildProductsFilters()).subscribe({
       next: (data) => {
         this.topProducts.set(data);
         this.productsLoading.set(false);
@@ -183,15 +261,59 @@ export class ReportListComponent implements OnInit {
     });
   }
 
-  loadCashierCloseouts(): void {
-    this.closeoutsLoading.set(true);
-    const filters: ICashierCloseoutFilters = {
+  private buildTicketsFilters(): ISalesByTicketFilters {
+    return {
+      ...(this.ticketsFilters.from ? { from: this.ticketsFilters.from } : {}),
+      ...(this.ticketsFilters.to ? { to: this.ticketsFilters.to } : {}),
+      ...(this.ticketsFilters.branchId ? { branchId: this.ticketsFilters.branchId } : {})
+    };
+  }
+
+  loadSalesByTicket(): void {
+    this.ticketsLoading.set(true);
+    this.expandedTickets.set(new Set());
+    this.reportsService.getSalesByTicket(this.buildTicketsFilters()).subscribe({
+      next: (data) => {
+        this.salesByTicket.set(data);
+        this.ticketsLoading.set(false);
+      },
+      error: (e) => {
+        this.ticketsLoading.set(false);
+        this.notify.httpError(e);
+      }
+    });
+  }
+
+  canExpandTicket(ticket: ISalesByTicketRow): boolean {
+    return ticket.items.length > 0;
+  }
+
+  isTicketExpanded(saleId: number): boolean {
+    return this.expandedTickets().has(saleId);
+  }
+
+  toggleTicket(saleId: number): void {
+    const expanded = new Set(this.expandedTickets());
+    if (expanded.has(saleId)) {
+      expanded.delete(saleId);
+    } else {
+      expanded.add(saleId);
+    }
+    this.expandedTickets.set(expanded);
+  }
+
+  private buildCloseoutsFilters(): ICashierCloseoutFilters {
+    return {
       ...(this.closeoutsFilters.from ? { from: this.closeoutsFilters.from } : {}),
       ...(this.closeoutsFilters.to ? { to: this.closeoutsFilters.to } : {}),
       ...(this.closeoutsFilters.branchId ? { branchId: this.closeoutsFilters.branchId } : {}),
       ...(this.closeoutsFilters.userId ? { userId: this.closeoutsFilters.userId } : {})
     };
-    this.reportsService.getCashierCloseouts(filters).subscribe({
+  }
+
+  loadCashierCloseouts(): void {
+    this.closeoutsLoading.set(true);
+    this.reportsService.getCashierCloseouts(this.buildCloseoutsFilters()).subscribe({
       next: (data) => {
         this.closeouts.set(data);
         this.closeoutsLoading.set(false);
@@ -203,14 +325,17 @@ export class ReportListComponent implements OnInit {
     });
   }
 
-  loadSalesDetail(): void {
-    this.detailLoading.set(true);
-    const filters: ISalesDetailFilters = {
+  private buildDetailFilters(): ISalesDetailFilters {
+    return {
       ...(this.detailFilters.from ? { from: this.detailFilters.from } : {}),
       ...(this.detailFilters.to ? { to: this.detailFilters.to } : {}),
       ...(this.detailFilters.branchId ? { branchId: this.detailFilters.branchId } : {})
     };
-    this.reportsService.getSalesDetail(filters).subscribe({
+  }
+
+  loadSalesDetail(): void {
+    this.detailLoading.set(true);
+    this.reportsService.getSalesDetail(this.buildDetailFilters()).subscribe({
       next: (data) => {
         this.salesDetail.set(data);
         this.detailLoading.set(false);

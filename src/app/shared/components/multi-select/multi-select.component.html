@@ -1,0 +1,51 @@
+<div
+  #trigger
+  class="ms-trigger"
+  tabindex="0"
+  role="combobox"
+  aria-haspopup="listbox"
+  [attr.aria-expanded]="open()"
+  [class.disabled]="disabled"
+  [class.open]="open()"
+  (click)="toggle()"
+  (keydown)="onTriggerKeydown($event)"
+>
+  <span class="ms-value" [class.placeholder]="!selectedLabel">{{ selectedLabel || placeholder }}</span>
+  <i class="pi pi-chevron-down ms-arrow"></i>
+</div>
+
+@if (open()) {
+  <div #panel class="ms-panel" role="listbox" aria-multiselectable="true" (keydown)="onKeydown($event)">
+    <div class="ms-search">
+      <i class="pi pi-search"></i>
+      <input
+        type="text"
+        [ngModel]="search()"
+        (ngModelChange)="onSearchChange($event)"
+        [placeholder]="searchPlaceholder"
+        autocomplete="off"
+      />
+    </div>
+    <div class="ms-options">
+      @if (filteredOptions.length === 0) {
+        <div class="ms-empty">{{ emptyLabel }}</div>
+      } @else {
+        @for (option of filteredOptions; track option.value) {
+          <label
+            class="ms-option"
+            [class.selected]="isSelected(option)"
+            [class.disabled]="option.disabled"
+          >
+            <input
+              type="checkbox"
+              [checked]="isSelected(option)"
+              [disabled]="option.disabled"
+              (click)="toggleOption(option)"
+            />
+            <span>{{ option.label }}</span>
+          </label>
+        }
+      }
+    </div>
+  </div>
+}

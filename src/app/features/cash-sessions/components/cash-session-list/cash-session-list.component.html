@@ -39,7 +39,7 @@
   </div>
 </p-dialog>
 
-<app-close-cash-session-dialog #closeDialog [session]="currentSession()" (closed)="onSessionClosed()" />
+<app-close-cash-session-dialog #closeDialog [session]="currentSession()" (closed)="onSessionClosed()" (reopened)="onSessionReopened()" />
 
 <!-- Estado actual -->
 <div class="current-card">
@@ -70,8 +70,8 @@
 
 <!-- Historial -->
 <div class="filters-bar">
-  <input type="date" class="filter-date" [(ngModel)]="filterFrom" (ngModelChange)="onFilterChange()" title="Desde" />
-  <input type="date" class="filter-date" [(ngModel)]="filterTo" (ngModelChange)="onFilterChange()" title="Hasta" />
+  <input type="date" class="filter-date" [(ngModel)]="filterFrom" (ngModelChange)="onFilterChange()" [appTooltip]="'Desde'" aria-label="Desde" />
+  <input type="date" class="filter-date" [(ngModel)]="filterTo" (ngModelChange)="onFilterChange()" [appTooltip]="'Hasta'" aria-label="Hasta" />
   <select class="filter-select" [(ngModel)]="filterCashRegisterId" (ngModelChange)="onFilterChange()">
     <option [ngValue]="null">Todas las cajas</option>
     @for (cashRegister of cashRegisters(); track cashRegister.id) {
@@ -130,6 +130,12 @@
                     } @else {
                       <span class="closed-badge">Cerrado</span>
                     }
+                    @if (session.reopenedAt) {
+                      <i
+                        class="pi pi-history reopened-mark"
+                        [appTooltip]="'Reabierto por ' + session.reopenedBy + ' el ' + (session.reopenedAt | date: 'short') + ': ' + session.reopenReason"
+                      ></i>
+                    }
                   </td>
                   <td style="text-align: right">{{ session.openingAmount | number: '1.2-2' }}</td>
                   <td style="text-align: right">{{ session.closingAmount === null ? '—' : (session.closingAmount | number: '1.2-2') }}</td>
@@ -147,8 +153,11 @@
                   <td>{{ session.closedAt ? (session.closedAt | date: 'short') : '—' }}</td>
                   <td>
                     @if (!session.isOpen) {
-                      <button class="action-btn print" (click)="closeDialog.reprint(session.id)" title="Reimprimir corte">
+                      <button class="action-btn print" (click)="closeDialog.reprint(session.id)" [appTooltip]="'Reimprimir corte'" aria-label="Reimprimir corte">
                         <i class="pi pi-print"></i>
+                      </button>
+                      <button class="action-btn reopen" *appHasPermission="'CASH_SESSIONS.REOPEN'" (click)="closeDialog.openReopen(session)" [appTooltip]="'Reabrir turno'" aria-label="Reabrir turno">
+                        <i class="pi pi-history"></i>
                       </button>
                     }
                   </td>

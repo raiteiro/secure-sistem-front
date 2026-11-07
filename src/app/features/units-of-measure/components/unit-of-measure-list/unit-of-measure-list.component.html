@@ -77,6 +77,14 @@
           <th>Estado</th>
           @if (authService.isSystemAdmin()) { <th style="text-align: center; width: 12%">Acciones</th> }
         </tr>
+        <tr class="col-filter-row">
+          <th><input type="text" class="col-filter-input" placeholder="Filtrar..." (input)="dt.filter($any($event.target).value, 'name', 'contains')" /></th>
+          <th><input type="text" class="col-filter-input" placeholder="Filtrar..." (input)="dt.filter($any($event.target).value, 'abbreviation', 'contains')" /></th>
+          <th></th>
+          <th></th>
+          <th></th>
+          @if (authService.isSystemAdmin()) { <th></th> }
+        </tr>
       </ng-template>
       <ng-template pTemplate="body" let-unit>
         <tr [class.inactive-row]="!unit.isActive">

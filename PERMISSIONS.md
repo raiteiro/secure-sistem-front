@@ -156,6 +156,11 @@ Catálogo
 │   ├── PRODUCTS.DEACTIVATE          Desactivar (ícono basura por fila)
 │   └── PRODUCTS.ASSIGN_COMBO_ITEMS  Editar componentes del combo (ícono caja por fila, solo si isCombo)
 │
+├── Extras                           /catalogo/extras         ProductExtraListComponent
+│   ├── EXTRAS.CREATE                Nuevo extra (+ variante "nuevo en esta empresa")
+│   ├── EXTRAS.EDIT                  Editar (ícono lápiz por fila)
+│   └── EXTRAS.DEACTIVATE            Desactivar (ícono basura por fila)
+│
 ├── Clientes                         /catalogo/clientes       CustomerListComponent
 │   ├── CUSTOMERS.CREATE             Nuevo cliente (+ variante "nuevo en esta empresa")
 │   ├── CUSTOMERS.EDIT               Editar (ícono lápiz por fila)
@@ -174,7 +179,8 @@ Caja
 │
 └── Turnos de caja                   /caja/turnos             CashSessionListComponent
     ├── CASH_SESSIONS.OPEN           Abrir caja / abrir turno
-    └── CASH_SESSIONS.CLOSE          Cerrar turno
+    ├── CASH_SESSIONS.CLOSE          Cerrar turno
+    └── CASH_SESSIONS.REOPEN         Reabrir turno (corrige un cierre equivocado)
 
 Ventas                                /ventas                 SalePosComponent
 ├── SALES.REGISTER                   Registrar venta (tab "Nueva venta")
@@ -236,6 +242,9 @@ Consignaciones                        /consignaciones         ConsignmentListCom
 | `PRODUCTS.EDIT` | Productos | `/catalogo/productos` | `ProductListComponent` | Editar producto | Ícono lápiz por fila |
 | `PRODUCTS.DEACTIVATE` | Productos | `/catalogo/productos` | `ProductListComponent` | Desactivar producto | Ícono basura por fila |
 | `PRODUCTS.ASSIGN_COMBO_ITEMS` | Productos | `/catalogo/productos` | `ProductListComponent` | Editar componentes de un combo/kit | Ícono caja por fila (solo visible si `product.isCombo`) |
+| `EXTRAS.CREATE` | Extras | `/catalogo/extras` | `ProductExtraListComponent` | Crear extra | Botón "Nuevo extra" / `group-add-btn` |
+| `EXTRAS.EDIT` | Extras | `/catalogo/extras` | `ProductExtraListComponent` | Editar extra | Ícono lápiz por fila |
+| `EXTRAS.DEACTIVATE` | Extras | `/catalogo/extras` | `ProductExtraListComponent` | Desactivar extra | Ícono basura por fila |
 | `CUSTOMERS.CREATE` | Clientes | `/catalogo/clientes` | `CustomerListComponent` | Crear cliente | Botón "Nuevo cliente" / `group-add-btn` |
 | `CUSTOMERS.EDIT` | Clientes | `/catalogo/clientes` | `CustomerListComponent` | Editar cliente | Ícono lápiz por fila |
 | `CUSTOMERS.DEACTIVATE` | Clientes | `/catalogo/clientes` | `CustomerListComponent` | Desactivar cliente | Ícono basura por fila |
@@ -247,6 +256,7 @@ Consignaciones                        /consignaciones         ConsignmentListCom
 | `CASH_REGISTERS.DEACTIVATE` | Cajas | `/caja/cajas` | `CashRegisterListComponent` | Desactivar caja | Ícono basura por fila |
 | `CASH_SESSIONS.OPEN` | Turnos de caja | `/caja/turnos` | `CashSessionListComponent` | Abrir turno | Botón "Abrir caja" |
 | `CASH_SESSIONS.CLOSE` | Turnos de caja | `/caja/turnos` | `CashSessionListComponent` | Cerrar turno | Botón "Cerrar turno" |
+| `CASH_SESSIONS.REOPEN` | Turnos de caja | `/caja/turnos` | `CashSessionListComponent` | Reabrir turno | Ícono "history" por fila (turnos cerrados, historial) |
 | `SALES.REGISTER` | Ventas | `/ventas` | `SalePosComponent` | Registrar venta | Botón "Registrar venta" (tab "Nueva venta") |
 | `SALES.CANCEL` | Ventas | `/ventas` | `SalePosComponent` | Cancelar venta | Ícono cancelar por fila (tab "Historial") |
 | `SALES.SEND_RECEIPT` | Ventas | `/ventas` | `SalePosComponent` | Enviar recibo por correo | Botón "Enviar" en modal de recibo |

@@ -28,12 +28,11 @@ export interface ISalesByPeriodReport {
   totalAmount: number;
 }
 
-/** Query params opcionales de GET /api/reports/top-products. limit entre 1 y 100 (default 10) */
+/** Query params opcionales de GET /api/reports/top-products ("Ventas por producto") */
 export interface ITopProductsFilters {
   from?: string;
   to?: string;
   branchId?: number;
-  limit?: number;
 }
 
 /**
@@ -157,4 +156,60 @@ export interface ISalesDetailReport {
   discountsCount: number;
   discountsTotal: number;
   sessions: ISalesDetailSessionRow[];
+}
+
+/** Query params opcionales de GET /api/reports/sales-by-ticket. Sin from/to → mes en curso a la fecha */
+export interface ISalesByTicketFilters {
+  from?: string;
+  to?: string;
+  branchId?: number;
+}
+
+export interface ISalesByTicketProductRow {
+  productName: string;
+  sku: string | null;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+  taxAmount: number;
+  /** Suma de precios de los extras seleccionados × cantidad — ya incluido en subtotal */
+  extrasTotal: number;
+  extras: ISalesByTicketExtraRow[];
+  total: number;
+}
+
+export interface ISalesByTicketExtraRow {
+  extraName: string;
+  /** Snapshot por unidad — para el total de este extra en la línea, multiplicar por quantity */
+  price: number;
+}
+
+export interface ISalesByTicketPaymentRow {
+  method: PaymentMethod;
+  amount: number;
+}
+
+export interface ISalesByTicketRow {
+  saleId: number;
+  folioNumber: number;
+  createdAt: string;
+  branchName: string;
+  /** Cajero que cobró la venta */
+  username: string;
+  customerName: string | null;
+  subtotal: number;
+  discountTotal: number;
+  taxTotal: number;
+  total: number;
+  items: ISalesByTicketProductRow[];
+  payments: ISalesByTicketPaymentRow[];
+}
+
+/** Respuesta de GET /api/reports/sales-by-ticket: una venta por fila, con sus líneas y pagos */
+export interface ISalesByTicketReport {
+  from: string;
+  to: string;
+  tickets: ISalesByTicketRow[];
+  ticketsCount: number;
+  totalAmount: number;
 }

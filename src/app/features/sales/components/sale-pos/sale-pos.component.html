@@ -53,6 +53,13 @@
                   <td class="receipt-item-name">{{ item.productName }}</td>
                   <td class="receipt-amount">{{ (item.unitPrice * item.quantity) | number: '1.2-2' }}</td>
                 </tr>
+                @for (extra of item.extras; track extra.extraName) {
+                  <tr class="receipt-item-extra">
+                    <td></td>
+                    <td>+ {{ extra.extraName }}</td>
+                    <td class="receipt-amount">{{ (extra.price * item.quantity) | number: '1.2-2' }}</td>
+                  </tr>
+                }
                 @if (item.discountAmount > 0) {
                   <tr class="receipt-item-discount">
                     <td></td>
@@ -137,6 +144,35 @@
     <button class="rm-btn-save" (click)="onSaveSupervisorApproval()" [disabled]="authorizingCancel()">
       @if (authorizingCancel()) { <i class="pi pi-spinner pi-spin"></i> } @else { <i class="pi pi-check"></i> }
       Autorizar
+    </button>
+  </div>
+</p-dialog>
+
+<!-- MODAL: elegir extras al agregar un producto que ofrece alguno -->
+<p-dialog [(visible)]="showExtrasModal" [modal]="true" [draggable]="false" [resizable]="false"
+  [style]="{ width: '380px' }" [showHeader]="false" [contentStyle]="{ padding: '0' }" styleClass="route-modal">
+  <div class="rm-header">
+    <div class="rm-title"><i class="pi pi-plus-circle"></i> {{ extrasModalEditingLineId !== null ? 'Editar extras' : 'Extras' }} — {{ extrasModalProduct?.name }}</div>
+    <button class="rm-close" (click)="closeExtrasModal()"><i class="pi pi-times"></i></button>
+  </div>
+  <div class="rm-body">
+    @if (extrasModalProduct) {
+      <div class="extras-modal-list">
+        @for (extra of extrasOfferedBy(extrasModalProduct); track extra.id) {
+          <label class="extras-modal-option" [class.selected]="isExtraSelected(extra.id)">
+            <input type="checkbox" [checked]="isExtraSelected(extra.id)" (change)="toggleExtraSelection(extra.id)" />
+            <span class="extras-modal-name">{{ extra.name }}</span>
+            <span class="extras-modal-price">+{{ extra.price | number: '1.2-2' }}</span>
+          </label>
+        }
+      </div>
+    }
+  </div>
+  <div class="rm-footer">
+    <button class="rm-btn-cancel" (click)="closeExtrasModal()">Cancelar</button>
+    <button class="rm-btn-save" (click)="confirmAddWithExtras()">
+      <i class="pi pi-check"></i>
+      {{ extrasModalEditingLineId !== null ? 'Guardar' : (extrasModalSelected.length > 0 ? 'Agregar' : 'Sin extra') }}
     </button>
   </div>
 </p-dialog>
@@ -235,6 +271,7 @@
                         <i class="pi pi-image"></i>
                       }
                       @if (product.isCombo) { <span class="product-card-combo-badge">Combo</span> }
+                      @if (product.extraIds.length > 0) { <span class="product-card-extras-badge" appTooltip="Tiene extras disponibles"><i class="pi pi-plus-circle"></i></span> }
                     </span>
                     <span class="product-card-name">{{ product.name }}</span>
                     <span class="product-card-sku">{{ product.sku || '—' }}</span>
@@ -269,13 +306,27 @@
             </div>
           }
           <div class="cart-lines">
-            @for (line of cartComputed(); track line.productId) {
+            @for (line of cartComputed(); track line.lineId) {
               <div class="cart-line">
                 <div class="cart-line-head">
                   <span class="cart-line-name">{{ line.productName }}</span>
-                  <button class="remove-btn" (click)="removeLine(line)" title="Quitar"><i class="pi pi-times"></i></button>
+                  <div class="cart-line-head-actions">
+                    @if (canEditLineExtras(line)) {
+                      <button class="edit-extras-btn" (click)="onEditLineExtras(line)" appTooltip="Editar extras" aria-label="Editar extras"><i class="pi pi-sliders-h"></i></button>
+                    }
+                    <button class="remove-btn" (click)="removeLine(line)" appTooltip="Quitar" aria-label="Quitar">
+                      <i class="pi pi-times"></i>
+                    </button>
+                  </div>
                 </div>
                 <span class="cart-line-meta">{{ line.productSku || '—' }} · {{ line.price | number: '1.2-2' }} / {{ line.unitAbbreviation }}</span>
+                @if (line.extras.length > 0) {
+                  <span class="cart-line-extras">
+                    @for (extra of line.extras; track extra.id) {
+                      <span class="cart-line-extra-chip">+ {{ extra.name }} ({{ extra.price | number: '1.2-2' }})</span>
+                    }
+                  </span>
+                }
                 <div class="cart-line-controls">
                   <div class="qty-stepper">
                     <button class="qty-btn" (click)="updateQuantity(line, line.quantity - 1)" [disabled]="line.quantity <= 1"><i class="pi pi-minus"></i></button>
@@ -289,7 +340,7 @@
                       (ngModelChange)="updateQuantity(line, $event)"
                     />
                     <button class="qty-btn" (click)="updateQuantity(line, line.quantity + 1)"
-                      [disabled]="availableFor(line.productId) <= 0" title="Agregar uno más" aria-label="Agregar uno más">
+                      [disabled]="availableFor(line.productId) <= 0" appTooltip="Agregar uno más" aria-label="Agregar uno más">
                       <i class="pi pi-plus"></i>
                     </button>
                   </div>
@@ -299,7 +350,8 @@
                     min="0"
                     max="100"
                     step="any"
-                    title="Descuento (%)"
+                    appTooltip="Descuento (%)"
+                    aria-label="Descuento (%)"
                     placeholder="Desc. %"
                     [ngModel]="line.discountPercent || null"
                     (ngModelChange)="updateDiscount(line, $event)"
@@ -345,7 +397,7 @@
                 (ngModelChange)="updatePaymentAmount(payment.id, $event)"
                 placeholder="Monto"
               />
-              <button class="remove-btn" (click)="removePaymentLine(payment.id)" title="Quitar pago"><i class="pi pi-times"></i></button>
+              <button class="remove-btn" (click)="removePaymentLine(payment.id)" appTooltip="Quitar pago" aria-label="Quitar pago"><i class="pi pi-times"></i></button>
             </div>
             @if (payment.method === 'Cash') {
               <div class="cash-received-row">
@@ -386,8 +438,8 @@
 } @else {
   <!-- Historial: visible sin importar si hay turno abierto, para que un admin de sistema pueda ver ventas de todas las empresas -->
   <div class="filters-bar">
-    <input type="date" class="filter-date" [(ngModel)]="historyFilterFrom" (ngModelChange)="onHistoryFilterChange()" title="Desde" />
-    <input type="date" class="filter-date" [(ngModel)]="historyFilterTo" (ngModelChange)="onHistoryFilterChange()" title="Hasta" />
+    <input type="date" class="filter-date" [(ngModel)]="historyFilterFrom" (ngModelChange)="onHistoryFilterChange()" appTooltip="Desde" aria-label="Desde" />
+    <input type="date" class="filter-date" [(ngModel)]="historyFilterTo" (ngModelChange)="onHistoryFilterChange()" appTooltip="Hasta" aria-label="Hasta" />
     <select class="filter-select" [(ngModel)]="historyFilterBranchId" (ngModelChange)="onHistoryFilterChange()">
       <option [ngValue]="null">Todas las sucursales</option>
       @for (branch of historyBranches(); track branch.id) {
@@ -445,7 +497,7 @@
                     <td style="text-align: right">{{ sale.total | number: '1.2-2' }}</td>
                     <td>
                       <span class="status-badge" [class.cancelled]="sale.status === 'Cancelled'">
-                        {{ sale.status === 'Cancelled' ? 'Cancelada' : (sale.status || '—') }}
+                        {{ sale.status === 'Cancelled' ? 'Cancelada' : (sale.status === 'Completed' ? 'Completada' : (sale.status || '—')) }}
                       </span>
                       @if (sale.status === 'Cancelled' && sale.modifiedBy) {
                         <span class="cancelled-by">por {{ sale.modifiedBy }}</span>
@@ -453,9 +505,9 @@
                     </td>
                     <td>
                       <div class="actions-cell">
-                        <button class="action-btn print" (click)="onViewReceipt(sale)" title="Ver / imprimir recibo"><i class="pi pi-receipt"></i></button>
+                        <button class="action-btn print" (click)="onViewReceipt(sale)" appTooltip="Ver / imprimir recibo" aria-label="Ver / imprimir recibo"><i class="pi pi-receipt"></i></button>
                         @if (sale.status === 'Completed') {
-                          <button class="action-btn cancel" (click)="onCancelSale(sale)" title="Cancelar venta"><i class="pi pi-ban"></i></button>
+                          <button class="action-btn cancel" (click)="onCancelSale(sale)" appTooltip="Cancelar venta" aria-label="Cancelar venta"><i class="pi pi-ban"></i></button>
                         }
                       </div>
                     </td>

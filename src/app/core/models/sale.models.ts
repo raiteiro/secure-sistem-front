@@ -8,6 +8,8 @@ export interface ISaleItemRequest {
   productId: number;
   quantity: number;
   discountAmount: number;
+  /** Extras (ver product-extra.models.ts) seleccionados para esta línea. Deben estar ofrecidos por el producto (IProduct.extraIds) */
+  extraIds: number[];
 }
 
 export interface ISalePaymentRequest {
@@ -44,11 +46,22 @@ export interface ISaleItem {
   unitPrice: number;
   discountAmount: number;
   taxRateValue: number;
-  /** Cantidad × precio − descuento, sin IVA, ya redondeado a centavos */
+  /** Suma de precios de los extras seleccionados × cantidad — ya incluido en subtotal */
+  extrasTotal: number;
+  extras: ISaleItemExtra[];
+  /** Cantidad × (precio + extras) − descuento, sin IVA, ya redondeado a centavos */
   subtotal: number;
   taxAmount: number;
   /** subtotal + taxAmount — lo que se cobró por la línea */
   total: number;
+}
+
+/** Extra seleccionado en una línea de venta, con su precio tal como se cobró (snapshot) */
+export interface ISaleItemExtra {
+  extraId: number;
+  extraName: string;
+  /** Snapshot por unidad — para el total de este extra en la línea, multiplicar por ISaleItem.quantity */
+  price: number;
 }
 
 export interface ISalePayment {

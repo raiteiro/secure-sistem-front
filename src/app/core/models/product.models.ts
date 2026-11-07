@@ -44,6 +44,10 @@ export interface IProduct {
   createdBy: string;
   modifiedAt: string | null;
   modifiedBy: string | null;
+  /** Almacenes donde este producto está restringido a aparecer en el POS. Vacío = sin restricción (aparece en todos) */
+  warehouseIds: number[];
+  /** Extras/adicionales (ver product-extra.models.ts) que este producto ofrece seleccionar en el POS */
+  extraIds: number[];
 }
 
 export type ProductKind = 'Product' | 'Supply';
@@ -79,6 +83,10 @@ export interface IProductRequest {
   supplierId?: number | null;
   commissionType?: CommissionType | null;
   commissionValue?: number | null;
+  /** Reemplazo completo. Vacío = sin restricción, aparece en todos los almacenes de la empresa */
+  warehouseIds: number[];
+  /** Reemplazo completo. Vacío = no ofrece ningún extra */
+  extraIds: number[];
 }
 
 /** Respuesta de POST /api/Products/{id}/image */
@@ -142,4 +150,8 @@ export interface IManufacturedProductRequest {
   /** Solo admin de sistema: crea el producto en otra empresa */
   companyId?: number | null;
   recipe: IRecipeItemRequest[];
+  /** Ver `IProductRequest.warehouseIds` */
+  warehouseIds?: number[];
+  /** Ver `IProductRequest.extraIds` */
+  extraIds?: number[];
 }

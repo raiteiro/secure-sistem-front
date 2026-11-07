@@ -1,0 +1,63 @@
+// Mismo look que un <select> nativo del proyecto (ver styles.scss / CLAUDE.md "Inputs")
+.ms-trigger {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  width: 100%; padding: 0.7rem 0.875rem;
+  border: 2px solid #e5e7eb; border-radius: 10px; background: #f9fafb;
+  font-size: 0.875rem; color: #1a1a2e;
+  cursor: pointer; outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+
+  &:focus, &.open {
+    border-color: var(--brand-button); background: #fff;
+    box-shadow: 0 0 0 3px rgba(var(--brand-button-rgb), 0.12);
+  }
+  &.disabled { cursor: not-allowed; opacity: 0.6; background: #f3f4f6; }
+}
+.ms-value {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  &.placeholder { color: #b0b0c0; }
+}
+.ms-arrow { font-size: 0.75rem; color: #9ca3af; flex-shrink: 0; transition: transform 0.15s; }
+.ms-trigger.open .ms-arrow { transform: rotate(180deg); }
+
+// El panel se reinserta en document.body al abrir — position/left/width/top se fijan por JS.
+// `position: fixed` y `visibility: hidden` van aquí (no solo por JS) para que, durante el primer
+// frame en que Angular ya lo pintó pero el `position()` de la clase todavía no corrió, el panel no
+// participe del flujo normal de la página (nada de reflow/salto visual) ni se vea en su posición
+// sin calcular — se hace visible recién cuando `position()` termina de ubicarlo.
+.ms-panel {
+  position: fixed; visibility: hidden; top: 0; left: 0;
+  z-index: 100000;
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  max-height: 20rem;
+}
+.ms-search {
+  position: relative; flex-shrink: 0; padding: 0.5rem; border-bottom: 1px solid #f0f0f5;
+  i { position: absolute; left: 1.25rem; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 0.8125rem; }
+  input {
+    width: 100%; padding: 0.5rem 0.625rem 0.5rem 2.125rem;
+    border: 2px solid #e5e7eb; border-radius: 8px;
+    font-size: 0.8125rem; color: #1a1a2e; background: #f9fafb;
+    outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+    &::placeholder { color: #b0b0c0; }
+    &:focus { border-color: var(--brand-button); background: #fff; box-shadow: 0 0 0 3px rgba(var(--brand-button-rgb), 0.12); }
+  }
+}
+.ms-options { overflow-y: auto; padding: 0.25rem; }
+.ms-option {
+  display: flex; align-items: center; gap: 0.625rem;
+  padding: 0.55rem 0.75rem; border-radius: 8px;
+  font-size: 0.875rem; color: #374151; cursor: pointer;
+
+  &:hover { background: #f3f4f6; }
+  &.selected { color: var(--brand-button); font-weight: 600; }
+  &.disabled { color: #d1d5db; cursor: not-allowed; }
+
+  input[type='checkbox'] {
+    width: 16px; height: 16px; flex-shrink: 0; accent-color: var(--brand-button); cursor: pointer;
+  }
+  span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+.ms-empty { padding: 0.875rem 0.75rem; text-align: center; font-size: 0.8125rem; color: #9ca3af; }

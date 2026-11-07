@@ -85,6 +85,14 @@
   i { font-size: 0.8125rem; }
   &:hover { transform: scale(1.1); }
   &.print { color: var(--brand-button); &:hover { background: rgba(var(--brand-button-rgb), 0.1); } }
+  &.reopen { color: #f59e0b; &:hover { background: rgba(245, 158, 11, 0.1); } }
+}
+
+.reopened-mark {
+  margin-left: 0.4rem;
+  color: #f59e0b;
+  font-size: 0.75rem;
+  cursor: help;
 }
 
 @media (max-width: 768px) {
